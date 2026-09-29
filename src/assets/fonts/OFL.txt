@@ -1,0 +1,3 @@
+Шрифты DM Sans (Colophon Foundry, Jonny Pinhorn), Inter (Rasmus Andersson)
+и JetBrains Mono (JetBrains) распространяются по SIL Open Font License 1.1.
+Полный текст лицензии: https://openfontlicense.org

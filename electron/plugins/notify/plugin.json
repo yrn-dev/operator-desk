@@ -1,0 +1,11 @@
+{
+  "id": "notify",
+  "name": "Уведомления",
+  "description": "Агент сообщает на рабочий стол, когда закончил долгую работу или ждёт решения.",
+  "version": "1.0.0",
+  "author": "ProjectZero",
+  "kind": "tool",
+  "icon": "bell",
+  "entry": "index.mjs",
+  "permissions": ["Показывает системные уведомления"]
+}

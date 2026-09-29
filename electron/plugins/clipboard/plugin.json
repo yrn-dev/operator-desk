@@ -1,0 +1,11 @@
+{
+  "id": "clipboard",
+  "name": "Буфер обмена",
+  "description": "Агент читает то, что вы скопировали, и кладёт результат обратно в буфер.",
+  "version": "1.0.0",
+  "author": "ProjectZero",
+  "kind": "tool",
+  "icon": "clipboard",
+  "entry": "index.mjs",
+  "permissions": ["Читает и меняет системный буфер обмена"]
+}

@@ -1,0 +1,220 @@
+{
+  "name": "operator-desk",
+  "version": "0.3.0",
+  "description": "Operator — настольное приложение для ИИ-агента operator",
+  "desktopName": "operator-desk.desktop",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "pack": "vite build && electron-builder --dir",
+    "dist:linux": "node scripts/bundle-operator.mjs && vite build && electron-builder --linux AppImage deb",
+    "dist:win": "node scripts/bundle-operator.mjs && vite build && electron-builder --win nsis portable",
+    "dist:mac": "node scripts/bundle-operator.mjs && vite build && electron-builder --mac dmg zip --arm64 --x64",
+    "smoke": "tsx scripts/smoke.ts",
+    "typecheck": "tsc --noEmit",
+    "check:restore": "tsx scripts/restore-check.ts",
+    "check:attach": "tsx scripts/attach-check.ts",
+    "prepack": "node scripts/bundle-operator.mjs",
+    "dist:linux:rpm": "node scripts/bundle-operator.mjs && vite build && electron-builder --linux rpm",
+    "check:platform": "node scripts/platform-check.mjs",
+    "zip:source": "rm -f ../operator-desk-source.zip && zip -rq ../operator-desk-source.zip . -x 'node_modules/*' -x 'dist/*' -x 'dist-electron/*' -x 'release/*' -x 'vendor/*' -x '.git/*' && echo '../operator-desk-source.zip готов'",
+    "dist:linux:pacman": "node scripts/bundle-operator.mjs && vite build && electron-builder --linux pacman"
+  },
+  "author": "yernur",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3",
+    "simple-icons": "^16.31.0",
+    "tsx": "^4.23.13",
+    "typebox": "^1.3.30",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vite-plugin-electron": "^1.1.2",
+    "vite-plugin-electron-renderer": "^1.0.0"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "clsx": "^2.1.1",
+    "dompurify": "^3.4.15",
+    "framer-motion": "^13.4.4",
+    "highlight.js": "^11.12.0",
+    "lucide-react": "^1.48.0",
+    "marked": "^18.0.12",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "type": "module",
+  "build": {
+    "appId": "ai.projectzero.operator.desk",
+    "productName": "Operator",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**"
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "pacman",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "maintainer": "yernur",
+      "synopsis": "Настольное приложение для ИИ-агента operator",
+      "description": "Operator — ИИ-агент в отдельном окне: диалоги, инструменты, автопилот и MCP.",
+      "desktop": {
+        "entry": {
+          "Name": "Operator",
+          "Comment": "ИИ-агент operator в отдельном окне",
+          "Categories": "Development;Utility;"
+        }
+      },
+      "syncDesktopName": true,
+      "executableName": "operator-desk"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "signAndEditExecutable": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSAppleEventsUsageDescription": "Автопилот управляет окнами и вводом через System Events.",
+        "NSScreenCaptureUsageDescription": "Автопилоту нужен снимок экрана, чтобы видеть интерфейс."
+      }
+    },
+    "extraResources": [
+      {
+        "from": "vendor/node_modules",
+        "to": "operator/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "asarUnpack": [
+      "dist-electron/bridge/**",
+      "dist-electron/plugins/**"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "yrn-dev",
+        "repo": "operator"
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Operator",
+      "deleteAppDataOnUninstall": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 140,
+          "y": 200
+        },
+        {
+          "x": 400,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${os}-${arch}-portable.${ext}"
+    },
+    "pacman": {
+      "depends": [
+        "c-ares",
+        "ffmpeg",
+        "gtk3",
+        "libevent",
+        "libvpx",
+        "libxslt",
+        "libxss",
+        "minizip",
+        "nss",
+        "re2",
+        "snappy",
+        "libnotify",
+        "libappindicator-gtk3"
+      ]
+    }
+  },
+  "homepage": "https://github.com/yrn-dev/operator"
+}

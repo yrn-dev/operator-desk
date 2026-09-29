@@ -1,0 +1,19 @@
+{
+  "id": "notes",
+  "name": "Заметки проекта",
+  "description": "Решения и договорённости по проекту, которые агент помнит между диалогами.",
+  "version": "1.0.0",
+  "author": "ProjectZero",
+  "kind": "tool",
+  "icon": "note",
+  "entry": "index.mjs",
+  "settings": [
+    {
+      "key": "file",
+      "label": "Файл заметок",
+      "hint": "Путь относительно рабочей папки диалога",
+      "default": ".operator-notes.md"
+    }
+  ],
+  "permissions": ["Читает и пишет файл заметок в рабочей папке"]
+}
