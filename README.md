@@ -1,6 +1,7 @@
 # Operator · десктоп
 
-Настольный коммутатор для агента [operator](https://github.com/yrn-dev/operator).
+Настольный коммутатор для агента [operator](https://github.com/yrn-dev/Operator) (CLI, npm `pzero-operator`).
+Исходники: [yrn-dev/operator-desk](https://github.com/yrn-dev/operator-desk).
 Не эмулятор терминала: приложение поднимает `opr --mode rpc` и говорит с ним
 по JSONL, а весь диалог, инструменты и телеметрию рисует само.
 
