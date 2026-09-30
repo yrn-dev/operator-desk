@@ -8,6 +8,51 @@ Linux собирается на машине автора, здесь он не 
 
 ---
 
+## Коротко: только команды
+
+Нужен Node.js 20+ ([nodejs.org](https://nodejs.org), вариант LTS) и интернет.
+Распакуйте архив в путь без пробелов и кириллицы (`C:\dev\operator-desk`,
+`~/dev/operator-desk`), откройте в этой папке терминал и выполните блок для
+своей системы целиком.
+
+**Windows** (PowerShell):
+
+```powershell
+Remove-Item -Recurse -Force node_modules, vendor, dist, dist-electron, release -ErrorAction SilentlyContinue
+npm install
+npm run dist:win
+node -p "require('./package.json').version"
+node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
+```
+
+**macOS** (Терминал):
+
+```bash
+rm -rf node_modules vendor dist dist-electron release
+npm install
+npm run dist:mac
+node -p "require('./package.json').version"
+node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
+```
+
+Две последние строки должны напечатать **`0.3.1`** (версия приложения) и
+**`1.2.3`** (версия ядра). Если цифры другие — архив старый, попросите у автора
+новый.
+
+Готовые файлы появятся в папке `release/`:
+
+| Система | Что отправить автору |
+| --- | --- |
+| Windows | `Operator-0.3.1-win-x64.exe` и `Operator-0.3.1-win-x64-portable.exe` |
+| macOS | `Operator-0.3.1-mac-arm64.dmg`, `Operator-0.3.1-mac-x64.dmg` и оба `.zip` |
+
+Если какая-то команда упала — подробные шаги и разбор ошибок ниже, начиная с
+раздела 1. Частые случаи: на macOS `identity not found` лечится запуском
+`CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac`, на Windows `EPERM ... symlink`
+— включением «Режима разработчика» в параметрах Windows.
+
+---
+
 ## 0. Что это и что должно получиться
 
 `operator-desk` — настольное приложение (Electron + Vite + React), оболочка для
@@ -48,7 +93,7 @@ npm --version
 
 ## 1.1. Откуда взялся архив (для автора)
 
-Архив собирается на машине автора одной командой — в него попадают только
+Архив собирается на машине автора одной командой (перед этим поднимите `version` в `package.json`) — в него попадают только
 исходники, без служебных папок:
 
 ```bash

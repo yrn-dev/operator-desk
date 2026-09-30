@@ -217,7 +217,27 @@ export default function deskBridge(operator) {
     }));
   }
 
+  // Ядро читает auth.json один раз при старте, а ключ десктоп дописывает в файл,
+  // пока процесс уже живёт, — без перечитывания запрос падает с «No API key found».
+  let registry = null;
+  const reloadAuth = () => {
+    try {
+      registry?.authStorage?.reload?.();
+    } catch {}
+  };
+  let authWatched = false;
+  operator.on("input", (_event, ctx) => {
+    registry = ctx.modelRegistry ?? registry;
+    reloadAuth();
+  });
+
   operator.on("session_start", (_event, ctx) => {
+    registry = ctx.modelRegistry ?? registry;
+    const authFile = registry?.authStorage?.storage?.authPath;
+    if (authFile && !authWatched) {
+      authWatched = true;
+      fs.watchFile(authFile, { interval: 1000, persistent: false }, reloadAuth);
+    }
     send(ctx, { kind: "ready", config: readConfig(), screen: inspectEnvironment() });
     // Ждать плагины здесь нельзя: обработчик задерживает саму сессию, а внешние
     // серверы поднимаются секундами. Сводка уходит десктопу, когда будет готова.

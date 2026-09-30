@@ -2,6 +2,9 @@
 
 Настольный коммутатор для агента [operator](https://github.com/yrn-dev/Operator) (CLI, npm `pzero-operator`).
 Исходники: [yrn-dev/operator-desk](https://github.com/yrn-dev/operator-desk).
+
+**Собрать на Windows или macOS:** откройте [BUILD.md](BUILD.md), раздел «Коротко: только команды».
+
 Не эмулятор терминала: приложение поднимает `opr --mode rpc` и говорит с ним
 по JSONL, а весь диалог, инструменты и телеметрию рисует само.
 

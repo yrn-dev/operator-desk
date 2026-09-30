@@ -9,12 +9,16 @@ import path from "node:path";
 const root = path.resolve("vendor");
 const marker = path.join(root, "node_modules", "pzero-operator", "package.json");
 
-const wanted = process.env.OPERATOR_VERSION ?? "latest";
+// Версия ядра закреплена: сборки на разных машинах должны быть одинаковыми.
+const PINNED = "1.2.3";
+const wanted = process.env.OPERATOR_VERSION ?? PINNED;
 
-if (fs.existsSync(marker) && wanted === "latest") {
+if (fs.existsSync(marker)) {
   const installed = JSON.parse(fs.readFileSync(marker, "utf8")).version;
-  console.log(`operator ${installed} уже внутри — пропускаю загрузку`);
-  process.exit(0);
+  if (wanted === "latest" || installed === wanted) {
+    console.log(`operator ${installed} уже внутри — пропускаю загрузку`);
+    process.exit(0);
+  }
 }
 
 fs.mkdirSync(root, { recursive: true });
@@ -29,6 +33,8 @@ console.log("загружаю operator в сборку…");
 execFileSync("npm", ["install", `pzero-operator@${wanted}`, "--omit=dev", "--no-audit", "--no-fund"], {
   cwd: root,
   stdio: "inherit",
+  // В Windows npm — это npm.cmd, а .cmd запускается только через оболочку.
+  shell: process.platform === "win32",
 });
 
 const version = JSON.parse(fs.readFileSync(marker, "utf8")).version;

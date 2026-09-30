@@ -1,6 +1,6 @@
 {
   "name": "operator-desk",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Operator — настольное приложение для ИИ-агента operator",
   "desktopName": "operator-desk.desktop",
   "main": "dist-electron/main.js",
