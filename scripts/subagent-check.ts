@@ -14,14 +14,22 @@ const line = new OperatorLine("sub", {
 });
 
 let used = false;
+let sawChildActivity = false;
+let sawLiveActivity = false;
 line.on("event", (event: any) => {
   if (event.type === "tool_execution_start" && event.toolName === "subagent") {
     used = true;
     console.log("субагент запущен, задача:", String(event.args?.task ?? "").slice(0, 80));
   }
+  if (event.type === "tool_execution_update" && event.toolName === "subagent") {
+    sawLiveActivity ||= (event.partialResult?.details?.steps?.length ?? 0) > 0;
+  }
   if (event.type === "tool_execution_end" && event.toolName === "subagent") {
     const text = (event.result?.content ?? []).map((c: any) => c.text).join("").slice(0, 200);
+    const steps = event.result?.details?.steps ?? [];
+    sawChildActivity = steps.some((step: any) => step.name === "read" || step.name === "grep" || step.name === "find" || step.name === "ls");
     console.log("итог субагента:", text.replace(/\n/g, " "));
+    console.log("действия субагента:", steps.map((step: any) => step.name).join(", "));
   }
 });
 line.on("fatal", (m: string) => { console.error("сбой:", m); process.exit(1); });
@@ -35,5 +43,7 @@ await line.send("prompt", {
 await Promise.race([idle, new Promise((_, rej) => setTimeout(() => rej(new Error("таймаут")), 180_000))]);
 
 console.log(`\nсубагент использован: ${used ? "да" : "нет"}`);
+console.log(`действия переданы: ${sawChildActivity ? "да" : "нет"}`);
+console.log(`живой ход работы: ${sawLiveActivity ? "да" : "нет"}`);
 line.stop();
-process.exit(used ? 0 : 1);
+process.exit(used && sawChildActivity && sawLiveActivity ? 0 : 1);

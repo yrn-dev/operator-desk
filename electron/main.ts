@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import { OperatorLine, pathWithBin } from "./rpc.ts";
 import { bundledOperator, locateBinary, locateOpr, type OperatorLauncher } from "./locate-opr.ts";
 import { listSessions } from "./sessions.ts";
@@ -16,6 +17,7 @@ import {
 } from "./session-ops.ts";
 import { IS_LINUX, IS_MAC, spawnPortable } from "./portable.ts";
 import { configureBrandIcons, resolvePluginIcon } from "./plugin-icons.ts";
+import { checkLatestVersion, recordUsage, setUsagePreference, usagePreference } from "./operator-service.ts";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(dirname, "..");
@@ -130,6 +132,17 @@ function mcpConfigPath(): string {
 function checkpointDir(): string {
   return path.join(app.getPath("userData"), "checkpoints");
 }
+
+/** Только сохранённый снимок конкретного вызова; произвольные пути из UI не читаем. */
+ipcMain.handle("tool:inspection", async (_e, toolCallId: string) => {
+  if (typeof toolCallId !== "string" || toolCallId.length > 200) return null;
+  const id = crypto.createHash("sha256").update(toolCallId).digest("hex");
+  try {
+    return JSON.parse(await fs.promises.readFile(path.join(checkpointDir(), "inspections", `${id}.json`), "utf8"));
+  } catch {
+    return null;
+  }
+});
 
 const DEFAULT_POLICY = { rules: [] as Array<Record<string, unknown>> };
 
@@ -252,6 +265,13 @@ function openInBrowser(url: string): void {
 
 ipcMain.handle("link:preview", (_e, args: { url: string }) => linkPreview(args.url));
 ipcMain.handle("link:open", (_e, args: { url: string }) => openInBrowser(args.url));
+ipcMain.handle("usage:preference", () => usagePreference());
+ipcMain.handle("usage:set", (_e, enabled: boolean) => {
+  if (typeof enabled !== "boolean") throw new TypeError("enabled must be a boolean");
+  setUsagePreference(enabled);
+  return usagePreference();
+});
+ipcMain.handle("app:latestVersion", () => checkLatestVersion());
 
 function forward(channel: string, payload: unknown): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -348,6 +368,7 @@ ipcMain.handle(
       throw new Error("линия не найдена");
     }
     try {
+      if (args.command === "prompt" || args.command === "steer") recordUsage("agent_used");
       return await line.send(args.command, args.payload ?? {});
     } catch (error) {
       // На выходе окно уже уничтожено — показывать отказ некому и незачем.
@@ -1152,4 +1173,5 @@ app.whenReady().then(() => {
   });
   installMenu();
   createWindow();
+  recordUsage("app_open");
 });

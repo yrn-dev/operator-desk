@@ -48,7 +48,10 @@ export default defineConfig({
     copyRuntimeFiles(),
     react(),
     electron({
-      main: { entry: "electron/main.ts" },
+      main: {
+        entry: "electron/main.ts",
+        vite: { define: { __OPERATOR_SERVICE_URL__: JSON.stringify(process.env.OPERATOR_SERVICE_URL ?? "") } },
+      },
       preload: {
         input: "electron/preload.ts",
         vite: {

@@ -262,8 +262,17 @@ export function Sidebar({
 
       <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px 12px 6px" }}>
         {historyBusy && history.length === 0 && (
-          <div style={{ padding: "14px 9px", fontSize: 12.5, color: "var(--text-faint)" }}>
-            читаю историю…
+          <div className="history-loading" role="status" aria-label="Загружаю историю диалогов">
+            <span className="history-loading-label">История диалогов</span>
+            {[0, 1, 2].map((index) => (
+              <div className="history-loading-row" key={index} aria-hidden>
+                <span className="session-loading-bar session-loading-square" />
+                <span className="history-loading-lines">
+                  <span className="session-loading-bar" style={{ width: `${78 - index * 12}%` }} />
+                  <span className="session-loading-bar" style={{ width: `${42 + index * 9}%` }} />
+                </span>
+              </div>
+            ))}
           </div>
         )}
 

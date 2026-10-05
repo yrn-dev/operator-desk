@@ -267,9 +267,12 @@ export async function connectMcpServer(operator, name, config) {
     sleepLater();
   }
 
+  const toolNames = [];
   for (const tool of tools) {
+    const registeredName = `${name}__${tool.name}`.replace(/[^a-zA-Z0-9_]/g, "_");
+    toolNames.push(registeredName);
     operator.registerTool({
-      name: `${name}__${tool.name}`.replace(/[^a-zA-Z0-9_]/g, "_"),
+      name: registeredName,
       label: `${name}: ${tool.name}`,
       description: tool.description ?? `Инструмент ${tool.name} сервера ${name}`,
       parameters: toParameters(tool.inputSchema),
@@ -301,6 +304,7 @@ export async function connectMcpServer(operator, name, config) {
   return {
     name,
     tools,
+    toolNames,
     get running() {
       return server.running;
     },

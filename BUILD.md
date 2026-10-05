@@ -1,6 +1,6 @@
 # Сборка Operator Desk на Windows и macOS
 
-Эта инструкция — для того, кто получил проект архивом и должен собрать из него
+Эта инструкция — для того, кто клонирует проект или получил его архивом и должен собрать
 готовое приложение. Её можно отдать ИИ-агенту целиком: шаги идут по порядку,
 у каждого есть признак успеха и разбор частых сбоев.
 
@@ -10,32 +10,38 @@ Linux собирается на машине автора, здесь он не 
 
 ## Коротко: только команды
 
-Нужен Node.js 20+ ([nodejs.org](https://nodejs.org), вариант LTS) и интернет.
-Распакуйте архив в путь без пробелов и кириллицы (`C:\dev\operator-desk`,
-`~/dev/operator-desk`), откройте в этой папке терминал и выполните блок для
-своей системы целиком.
+Нужен Node.js 22.19+ ([nodejs.org](https://nodejs.org), вариант LTS) и интернет.
+Клонируйте репозиторий или распакуйте архив в путь без пробелов и кириллицы
+(`C:\dev\operator-desk`, `~/dev/operator-desk`), затем выполните блок для своей системы.
 
 **Windows** (PowerShell):
 
 ```powershell
 Remove-Item -Recurse -Force node_modules, vendor, dist, dist-electron, release -ErrorAction SilentlyContinue
-npm install
+npm ci
 npm run dist:win
 node -p "require('./package.json').version"
 node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 ```
 
-**macOS** (Терминал):
+**macOS** (Терминал на MacBook, без сертификата подписи):
 
 ```bash
-rm -rf node_modules vendor dist dist-electron release
-npm install
-npm run dist:mac
+git clone https://github.com/yrn-dev/operator-desk.git
+cd operator-desk
+npm ci
+npm run check:platform
+npm run typecheck
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac
 node -p "require('./package.json').version"
 node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 ```
 
-Две последние строки должны напечатать **`0.3.1`** (версия приложения) и
+Если проект уже скачан, начните с `cd operator-desk`. Готовые `.dmg` и `.zip`
+из `release/` загрузите в GitHub Releases для версии 0.3.3 и передайте ссылку
+на релиз для обновления сайта загрузки.
+
+Две последние строки должны напечатать **`0.3.3`** (версия приложения) и
 **`1.2.3`** (версия ядра). Если цифры другие — архив старый, попросите у автора
 новый.
 
@@ -43,12 +49,11 @@ node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 
 | Система | Что отправить автору |
 | --- | --- |
-| Windows | `Operator-0.3.1-win-x64.exe` и `Operator-0.3.1-win-x64-portable.exe` |
-| macOS | `Operator-0.3.1-mac-arm64.dmg`, `Operator-0.3.1-mac-x64.dmg` и оба `.zip` |
+| Windows | `Operator-0.3.3-win-x64.exe` и `Operator-0.3.3-win-x64-portable.exe` |
+| macOS | `Operator-0.3.3-mac-arm64.dmg`, `Operator-0.3.3-mac-x64.dmg` и оба `.zip` |
 
 Если какая-то команда упала — подробные шаги и разбор ошибок ниже, начиная с
-раздела 1. Частые случаи: на macOS `identity not found` лечится запуском
-`CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac`, на Windows `EPERM ... symlink`
+раздела 1. На Windows `EPERM ... symlink`
 — включением «Режима разработчика» в параметрах Windows.
 
 ---
@@ -74,10 +79,10 @@ node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 
 ## 1. Что нужно поставить заранее
 
-**Обязательно — только Node.js 20 LTS или новее** (проверено на 22.x) вместе с npm.
+**Обязательно — Node.js 22.19 или новее** вместе с npm.
 
 ```bash
-node --version    # должно быть v20.x или выше
+node --version    # должно быть v22.19.0 или выше
 npm --version
 ```
 
@@ -86,7 +91,7 @@ npm --version
 - **macOS**: `brew install node` либо установщик с nodejs.org. Xcode не нужен,
   Command Line Tools — тоже.
 
-Нужен доступ в интернет: `npm install` тянет Electron (~100 МБ), а отдельный
+Нужен доступ в интернет: `npm ci` тянет Electron (~100 МБ), а отдельный
 шаг сборки скачивает пакет `pzero-operator` из npm.
 
 ---
@@ -124,7 +129,7 @@ rm -rf node_modules vendor dist dist-electron release
 ## 3. Установить зависимости
 
 ```bash
-npm install
+npm ci
 ```
 
 Признак успеха: появилась папка `node_modules`, в конце нет строк `npm error`.
@@ -262,7 +267,7 @@ xattr -dr com.apple.quarantine /Applications/Operator.app
 | `EPERM: operation not permitted, symlink` (Windows) | Нет прав на символические ссылки. Включите «Режим разработчика» в параметрах Windows либо запустите терминал от администратора. |
 | `ENOENT ... rpmbuild` | Это про Linux-цель, вам она не нужна: собирайте только `dist:win` / `dist:mac`. |
 | `Error: Cannot find module ... pzero-operator` | Не прошёл шаг упаковки ядра. Проверьте интернет и выполните `node scripts/bundle-operator.mjs` отдельно. |
-| Сборка падает на `@electron/rebuild` | Повторите `npm install`, затем сборку: обычно это недокачанный архив Electron. |
+| Сборка падает на `@electron/rebuild` | Повторите `npm ci`, затем сборку: обычно это недокачанный архив Electron. |
 
 Если ошибка не из таблицы — приложите к сообщению автору **последние 40 строк
 вывода** и версии: `node --version`, `npm --version`, версию системы.

@@ -1,14 +1,15 @@
-import { useState } from "react";
-import type { ToolRun } from "../types.ts";
+import { useMemo, useState, type ReactNode } from "react";
+import type { PluginInfo, ToolRun } from "../types.ts";
 import { toolCaption } from "../lineReducer.ts";
+import { presentTool } from "../toolPresentation.ts";
+import { PluginMark } from "./BrandIcon.tsx";
 import { ToolIcon } from "./ToolIcon.tsx";
-import { parsePlan, PlanView } from "./TaskPlan.tsx";
 
 /*
  * Ход работы агента: общая шапка «Работает…» с пиксельным индикатором,
  * под ней — строки действий. Строка показывает иконку (под курсором она
- * сменяется шевроном), название действия и чип с аргументом; раскрытие
- * отдаёт терминал с выводом, разбор правки или сырой ответ инструмента.
+ * сменяется шевроном), название действия и чип с аргументом. По нажатию
+ * результат раскрывается под действием.
  *
  * Механика и раскладка взяты из компонента ai-agent-response (21st.dev)
  * один в один; данные — настоящие вызовы инструментов оператора.
@@ -248,49 +249,34 @@ export function FileDiff({ file, rows }: { file: string; rows: DiffRow[] }) {
   );
 }
 
-/* ── Источники: ссылки, которые агент открывал ──────────────────── */
-
-function linksFrom(run: ToolRun): string[] {
-  const pool = `${JSON.stringify(run.args ?? {})} ${run.output.slice(0, 4000)}`;
-  const found = pool.match(/https?:\/\/[^\s"'<>)\\]+/g) ?? [];
-  return [...new Set(found)].slice(0, 6);
-}
-
-function host(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
-
 /* ── Строка действия ────────────────────────────────────────────── */
 
-function TraceRow({ run }: { run: ToolRun }) {
-  const [open, setOpen] = useState(false);
-
+function TraceRow({ run, plugin, onSelect, selected, details }: { run: ToolRun; plugin?: PluginInfo; onSelect: (run: ToolRun) => void; selected: boolean; details?: ReactNode }) {
   const caption = toolCaption(run.name, run.args);
+  const chip = plugin ? `${plugin.name ?? plugin.id}${caption ? ` · ${caption}` : ""}` : caption;
   const running = !run.done;
+  const completed = useMemo(() => run.done ? presentTool(run, plugin).title : "", [run, plugin]);
   const isCommand = run.name === "bash";
-  // Инструменты планирования показываем списком шагов, а не сырым выводом.
-  const plan = /task|todo|plan/i.test(run.name) ? parsePlan(run.output) : null;
   const diff = !isCommand && run.output ? parseDiff(run.output) : null;
-  const sources = /fetch|search|web|url/i.test(run.name) ? linksFrom(run) : [];
-  const duration =
-    run.startedAt && run.endedAt ? Math.max(1, run.endedAt - run.startedAt) : undefined;
-  const details = Boolean(run.output) || sources.length > 0 || Boolean(plan);
 
   return (
     <div className="trace-item">
       <button
         type="button"
-        className={`trace-row${details ? " trace-openable" : ""}`}
-        disabled={!details}
-        aria-expanded={open}
-        onClick={() => details && setOpen(!open)}
+        className={`trace-row trace-openable${selected ? " trace-selected" : ""}`}
+        aria-expanded={selected}
+        aria-label={`Подробности инструмента ${run.name}`}
+        onClick={() => onSelect(run)}
       >
         <span className="trace-glyph">
-          {running ? (
+          {plugin ? (
+            <>
+              <span className="trace-icon" title={`Плагин ${plugin.name ?? plugin.id}`}>
+                <PluginMark icon={plugin.resolvedIcon} name={plugin.icon ?? plugin.id} label={plugin.name ?? plugin.id} size={15} />
+              </span>
+              <Chevron open={selected} />
+            </>
+          ) : running ? (
             <PixelDots />
           ) : run.failed ? (
             <Alert />
@@ -299,18 +285,22 @@ function TraceRow({ run }: { run: ToolRun }) {
               <span className="trace-icon">
                 <ToolIcon name={run.name} color="var(--text-muted)" />
               </span>
-              {details && <Chevron open={open} />}
+              <Chevron open={selected} />
             </>
           )}
         </span>
 
-        <span className={`trace-title${running ? " trace-working" : ""}`}>{title(run.name)}</span>
+        <span className={`trace-title${plugin ? " trace-plugin-title" : ""}${running ? " trace-working" : ""}`}>
+          {running ? plugin ? `Использует ${plugin.name ?? plugin.id}` : title(run.name) : completed}
+        </span>
+        {plugin && running && <span className="trace-plugin-state"><PixelDots /></span>}
+        {plugin && run.failed && <span className="trace-plugin-state"><Alert /></span>}
 
-        {(plan || caption) && (
+        {chip && (
           <span
-            className={`trace-chip${!plan && (isCommand || /read|write|edit|ls/.test(run.name)) ? " trace-mono" : ""}`}
+            className={`trace-chip${(isCommand || /read|write|edit|ls/.test(run.name)) ? " trace-mono" : ""}`}
           >
-            {plan ? "план" : caption}
+            {chip}
           </span>
         )}
 
@@ -326,56 +316,19 @@ function TraceRow({ run }: { run: ToolRun }) {
         )}
       </button>
 
-      {details && (
-        <div className={`trace-fold${open ? "" : " trace-folded"}`}>
-          <div className="trace-fold-inner">
-            <div className="trace-details">
-              {plan ? (
-                <div className="trace-plan">
-                  <PlanView plan={plan} />
-                </div>
-              ) : isCommand ? (
-                <TerminalCard
-                  command={caption}
-                  output={run.output}
-                  failed={run.failed}
-                  running={running}
-                  durationMs={duration}
-                />
-              ) : diff ? (
-                <FileDiff file={caption || "правка"} rows={diff} />
-              ) : (
-                run.output && <pre className="trace-output">{run.output}</pre>
-              )}
+      {selected && details && <div className="trace-inline-details">{details}</div>}
 
-              {sources.length > 0 && (
-                <div className="trace-sources">
-                  {sources.map((url) => (
-                    <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="trace-source">
-                      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-                        <circle cx="8" cy="8" r="5.8" />
-                        <path d="M2.4 8h11.2M8 2.2c1.6 1.8 2.4 3.7 2.4 5.8S9.6 12 8 13.8C6.4 12 5.6 10.1 5.6 8s.8-4 2.4-5.8z" />
-                      </svg>
-                      {host(url)}
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 /* ── Ход работы целиком ─────────────────────────────────────────── */
 
-export function AgentTrace({ runs }: { runs: ToolRun[] }) {
+export function AgentTrace({ runs, pluginForTool, onSelectTool, selectedToolId, renderDetails }: { runs: ToolRun[]; pluginForTool: (toolName: string) => PluginInfo | undefined; onSelectTool: (run: ToolRun) => void; selectedToolId: string | null; renderDetails: (run: ToolRun) => ReactNode }) {
   return (
     <div className="trace">
       {runs.map((run) => (
-        <TraceRow key={run.id} run={run} />
+        <TraceRow key={run.id} run={run} plugin={pluginForTool(run.name)} onSelect={onSelectTool} selected={selectedToolId === run.id} details={selectedToolId === run.id ? renderDetails(run) : null} />
       ))}
     </div>
   );

@@ -188,6 +188,75 @@ textarea, input { font: inherit; color: inherit; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
+/* Субагенты появляются только в диалогах, где они действительно запущены. */
+.subagent-panel {
+  width: clamp(278px, 24vw, 340px);
+  flex: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.subagent-head {
+  min-height: 58px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-muted);
+}
+.subagent-heading { min-width: 0; flex: 1; display: flex; flex-direction: column; line-height: 1.35; }
+.subagent-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 13px; font-weight: 600; }
+.subagent-heading span { color: var(--text-faint); font-size: 11px; }
+.subagent-icon-button { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 6px; color: var(--text-muted); }
+.subagent-icon-button:hover { background: var(--bg-hover); color: var(--text); }
+.subagent-scroll { overflow-y: auto; min-height: 0; flex: 1; padding: 14px; }
+.subagent-intro, .subagent-muted { color: var(--text-muted); font-size: 12px; line-height: 1.55; margin: 0 0 14px; }
+.subagent-list { display: flex; flex-direction: column; gap: 7px; }
+.subagent-card {
+  width: 100%; display: flex; align-items: flex-start; gap: 10px; text-align: left;
+  padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg);
+}
+.subagent-card:hover, .subagent-card:focus-visible { border-color: var(--text-faint); background: var(--bg-hover); outline: none; }
+.subagent-card-status { width: 7px; height: 7px; margin-top: 6px; flex: none; border-radius: 50%; background: var(--warn); }
+.subagent-card-status.is-running, .subagent-step-mark.is-running { animation: subagent-breathe 1.3s ease-in-out infinite; }
+.subagent-card-status.is-done { background: var(--ok); }
+.subagent-card-status.is-error { background: var(--error); }
+.subagent-card-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.subagent-card-copy strong { color: var(--text); font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.subagent-card-task { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--text-muted); font-size: 11.5px; line-height: 1.45; }
+.subagent-card-meta, .subagent-card-activity { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: 10.5px; }
+.subagent-card-activity { color: var(--text-muted); }
+.subagent-card-arrow { color: var(--text-faint); line-height: 1; font-size: 20px; }
+.subagent-section-label { margin: 2px 0 8px; color: var(--text-faint); font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.subagent-task { margin: 0 0 12px; color: var(--text); white-space: pre-wrap; font-size: 12.5px; line-height: 1.55; }
+.subagent-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 22px; }
+.subagent-facts span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--text-muted); font-size: 10.5px; font-family: var(--mono); }
+.subagent-steps { list-style: none; margin: 0; padding: 0 0 0 3px; }
+.subagent-step { display: flex; gap: 9px; min-height: 38px; }
+.subagent-step-mark { width: 17px; height: 17px; flex: none; display: grid; place-items: center; margin-top: 2px; border: 1px solid var(--line); border-radius: 50%; color: var(--warn); }
+.subagent-step-mark.is-done { color: var(--ok); }
+.subagent-step-mark.is-error { color: var(--error); }
+.subagent-pulse { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.subagent-step-body { min-width: 0; flex: 1; padding-bottom: 15px; }
+.subagent-step-body strong { display: block; color: var(--text); font-size: 11.5px; font-weight: 500; }
+.subagent-step-body code { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font: 10.5px var(--mono); }
+.subagent-step-body p { margin: 3px 0 0; color: var(--error); font-size: 10.5px; line-height: 1.4; }
+.subagent-result { margin-top: 13px; padding-top: 15px; border-top: 1px solid var(--line); }
+.subagent-result .md { font-size: 12px; overflow-wrap: anywhere; }
+.subagent-result .md pre { max-width: 100%; }
+.subagent-toggle { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11.5px; }
+.subagent-toggle.is-active { background: var(--bg-hover); color: var(--text); }
+.subagent-toggle-count { color: var(--text-faint); font-family: var(--mono); }
+.subagent-toggle-dots { display: flex; align-items: center; gap: 2px; }
+.subagent-toggle-dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+@keyframes subagent-breathe { 50% { opacity: .35; } }
+@media (max-width: 1040px) {
+  .subagent-panel { position: absolute; z-index: 30; top: 0; right: 0; bottom: 0; width: min(360px, 100%); box-shadow: -15px 0 40px rgba(0,0,0,.3); }
+}
+
 /* ── Блоки кода: подсветка и кнопка копирования ─────────────────── */
 .md pre { position: relative; }
 .md pre .copy-code {
@@ -306,24 +375,40 @@ textarea, input { font: inherit; color: inherit; }
     border-color var(--fast) var(--ease);
 }
 
-/* Знак на пустом экране проявляется, а не возникает. */
-@keyframes breathe {
-  from { opacity: 0; transform: scale(0.94); }
-  to { opacity: 1; transform: none; }
-}
-.hello { animation: breathe var(--slow) var(--ease) both; }
+/* SVG начинает рисоваться сразу: короткое появление не скрывает начало линии. */
+@keyframes hello-in { from { opacity: 0; } to { opacity: 1; } }
+.hello { animation: hello-in 120ms ease-out both; }
 .hello > * + * { animation: rise var(--normal) var(--ease) both; }
+.hello-logo { display: block; max-width: min(100%, 76vw); line-height: 0; }
+.hello-logo img { display: block; width: 100%; height: auto; }
+.hello-heading { color: var(--text); font-size: clamp(22px, 2.3vw, 28px); font-weight: 600; letter-spacing: -0.035em; line-height: 1.2; }
 
-/* Мерцающая заглушка, пока читается сохранённая сессия. */
-@keyframes shimmer {
-  0% { opacity: 0.35; }
-  50% { opacity: 0.75; }
-  100% { opacity: 0.35; }
-}
-.shimmer {
-  background: var(--bg-raised);
-  animation: shimmer 1.5s ease-in-out infinite;
-  will-change: opacity;
+/* Восстановление диалога повторяет очертания реальной переписки. */
+.session-loading { padding-top: 10px; animation: rise 220ms var(--ease) both; }
+.session-loading-head { display: flex; align-items: center; gap: 12px; color: var(--text); }
+.session-loading-head > div { display: flex; flex-direction: column; gap: 3px; }
+.session-loading-head strong { font-size: 14px; font-weight: 600; }
+.session-loading-head > div > span { color: var(--text-faint); font-size: 12px; }
+.session-loading-track { height: 2px; margin: 18px 0 30px; overflow: hidden; background: var(--line-soft); }
+.session-loading-track > span { display: block; width: 34%; height: 100%; background: var(--text-muted); animation: session-track 1.1s ease-in-out infinite; }
+@keyframes session-track { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.session-loading-preview { display: flex; flex-direction: column; gap: 24px; opacity: .9; }
+.session-loading-user { align-self: flex-end; display: flex; flex-direction: column; gap: 10px; width: min(56%, 350px); padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--user-bg); }
+.session-loading-reply { display: flex; flex-direction: column; gap: 10px; width: 85%; }
+.session-loading-tool { display: flex; align-items: center; gap: 10px; width: 65%; height: 26px; }
+.session-loading-bar { position: relative; display: block; height: 10px; flex: none; overflow: hidden; border-radius: 5px; background: var(--bg-active); }
+.session-loading-user .session-loading-bar { background: var(--bg-active); }
+.session-loading-bar::after { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg, transparent, rgba(247,244,240,.16), transparent); animation: session-sheen 1.3s ease-in-out infinite; }
+@keyframes session-sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.session-loading-square { width: 17px; height: 17px; border-radius: 4px; }
+.history-loading { padding: 12px 8px 0; animation: hello-in 180ms ease-out 100ms both; }
+.history-loading-label { display: block; padding: 0 9px 8px; color: var(--text-faint); font-size: 11px; letter-spacing: .02em; }
+.history-loading-row { display: flex; align-items: flex-start; gap: 10px; padding: 12px 9px; border-bottom: 1px solid var(--line-soft); }
+.history-loading-lines { display: flex; flex: 1; flex-direction: column; gap: 9px; padding-top: 2px; }
+.history-loading-lines .session-loading-bar { height: 9px; }
+@media (prefers-reduced-motion: reduce) {
+  .session-loading-track > span { width: 100%; transform: none; }
+  .session-loading-bar::after { display: none; }
 }
 
 /* Кнопки отзываются мгновенно: только цвет, без перерасчёта разметки. */
@@ -624,6 +709,7 @@ textarea {
 }
 .trace-row.trace-openable { cursor: pointer; }
 .trace-row.trace-openable:hover { background: var(--bg-hover); }
+.trace-row.trace-selected { background: var(--bg-active); }
 .trace-row:active.trace-openable { transform: scale(0.995); }
 
 /* Иконка и шеврон занимают одно место: под курсором меняются местами. */
@@ -647,6 +733,9 @@ textarea {
 .trace-openable:hover .trace-glyph .trace-chevron { opacity: 1; }
 
 .trace-title { flex: none; color: var(--text); font-weight: 500; }
+.trace-plugin-title { max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.trace-plugin-state { display: inline-flex; align-items: center; flex: none; }
 
 .trace-chip {
   display: inline-flex;
@@ -1014,3 +1103,41 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.tool-inspector { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-raised); }
+.tool-inspector-head { display: flex; align-items: center; gap: 11px; padding: 12px 14px 9px; }
+.tool-inspector-mark { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.tool-inspector-heading { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 2px; }
+.tool-inspector-heading strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-inspector-heading span { color: var(--text-faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-inspector-close { width: 28px; height: 28px; border-radius: 7px; color: var(--text-muted); font-size: 21px; line-height: 1; }
+.tool-inspector-close:hover { background: var(--bg-hover); color: var(--text); }
+.tool-inspector-meta { display: flex; align-items: center; gap: 9px; padding: 0 14px 10px; border-bottom: 1px solid var(--line); color: var(--ok); font-size: 11px; }
+.tool-inspector-meta .tool-inspector-error { color: var(--error); }
+.tool-inspector-meta span:not(:first-child) { color: var(--text-faint); }
+.tool-inspector-scroll { padding: 14px; }
+.tool-inspector-code { margin: 0; padding: 12px; max-height: 430px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-inset); color: var(--text); font: 11.5px/1.55 var(--mono); white-space: pre; }
+.tool-inspector-note { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+.tool-inspector-links { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.tool-inspector-links a { color: var(--accent); font-size: 11.5px; overflow-wrap: anywhere; text-decoration: underline; }
+.tool-inspector .diff { width: 100%; }
+.tool-inspector .diff-body { max-height: 430px; overflow: auto; }
+.tool-inspector-parameters { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 12px; }
+.tool-inspector-parameters div { display: flex; gap: 5px; align-items: baseline; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 4px 7px; font-size: 11px; }
+.tool-inspector-parameters span, .tool-inspector-facts span { color: var(--text-faint); }
+.tool-inspector-parameters strong { color: var(--text-muted); font-weight: 500; overflow-wrap: anywhere; }
+.tool-inspector-time { display: flex; flex-direction: column; gap: 5px; padding: 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-inset); }
+.tool-inspector-time strong { color: var(--text); font-size: 20px; font-weight: 550; line-height: 1.3; }
+.tool-inspector-time span { color: var(--text-faint); font: 11.5px var(--mono); }
+.tool-inspector-list, .tool-inspector-facts { border-top: 1px solid var(--line); }
+.tool-inspector-list > div { display: flex; gap: 11px; align-items: baseline; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+.tool-inspector-list span { flex: none; color: var(--text-faint); font: 10px var(--mono); }
+.tool-inspector-list p { margin: 0; color: var(--text); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.tool-inspector-facts > div { display: flex; justify-content: space-between; gap: 14px; padding: 10px 2px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.tool-inspector-facts strong { max-width: 65%; color: var(--text); font-weight: 500; text-align: right; overflow-wrap: anywhere; }
+.tool-inspector-facts p, .tool-inspector-prose { margin: 0; color: var(--text); font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-inspector-file-content { color: var(--text); }
+
+/* Tool results expand in the conversation, directly below the chosen action. */
+.trace-inline-details { margin: 6px 0 14px 21px; max-width: min(calc(100% - 21px), 720px); }
+@media (max-width: 640px) { .trace-inline-details { margin-left: 0; max-width: 100%; } }

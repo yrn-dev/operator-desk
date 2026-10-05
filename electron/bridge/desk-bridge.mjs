@@ -73,6 +73,17 @@ function matchRule(rules, tool, subject) {
 }
 
 export default function deskBridge(operator) {
+  const pendingFileChanges = new Map();
+  const MAX_INSPECT_BYTES = 160 * 1024;
+  const readInspectable = (file) => {
+    if (!fs.existsSync(file)) return { exists: false, text: null, reason: null };
+    const stat = fs.statSync(file);
+    if (!stat.isFile()) return { exists: true, text: null, reason: "Это не обычный файл" };
+    if (stat.size > MAX_INSPECT_BYTES) return { exists: true, text: null, reason: "Файл больше 160 КБ" };
+    const bytes = fs.readFileSync(file);
+    if (bytes.includes(0)) return { exists: true, text: null, reason: "Двоичный файл" };
+    return { exists: true, text: bytes.toString("utf8"), reason: null };
+  };
   // ui доступен только из контекста обработчика, не из фабрики.
   const send = (ctx, payload) => {
     try {
@@ -83,7 +94,7 @@ export default function deskBridge(operator) {
   };
 
   /** Снимок файла до правки: позволяет откатить изменение целиком. */
-  function checkpoint(ctx, tool, input) {
+  function checkpoint(ctx, tool, input, toolCallId) {
     if (!CHECKPOINT_DIR || !WRITING_TOOLS.has(tool)) return;
     const target = input?.path ?? input?.file_path;
     if (!target || typeof target !== "string") return;
@@ -91,13 +102,16 @@ export default function deskBridge(operator) {
     try {
       fs.mkdirSync(CHECKPOINT_DIR, { recursive: true });
       const id = crypto.randomUUID();
-      const existed = fs.existsSync(target);
-      if (existed) fs.copyFileSync(target, path.join(CHECKPOINT_DIR, id));
+      const file = path.resolve(target);
+      const before = readInspectable(file);
+      const existed = before.exists;
+      if (existed) fs.copyFileSync(file, path.join(CHECKPOINT_DIR, id));
+      if (typeof toolCallId === "string") pendingFileChanges.set(toolCallId, { file, before });
       send(ctx, {
         kind: "checkpoint",
         id,
         tool,
-        file: target,
+        file,
         existed,
         at: new Date().toISOString(),
       });
@@ -124,14 +138,14 @@ export default function deskBridge(operator) {
     const needsAsk = explicit === "ask" || (explicit !== "allow" && dangerous);
 
     if (!needsAsk) {
-      checkpoint(ctx, tool, event.input);
+      checkpoint(ctx, tool, event.input, event.toolCallId);
       return;
     }
 
     // Без диалогового канала спрашивать некого — пропускаем, но помечаем.
     if (!ctx?.hasUI) {
       send(ctx, { kind: "auto-allowed", tool, subject });
-      checkpoint(ctx, tool, event.input);
+      checkpoint(ctx, tool, event.input, event.toolCallId);
       return;
     }
 
@@ -150,7 +164,34 @@ export default function deskBridge(operator) {
       return { block: true, reason: "Пользователь отклонил этот вызов." };
     }
 
-    checkpoint(ctx, tool, event.input);
+    checkpoint(ctx, tool, event.input, event.toolCallId);
+  });
+
+  operator.on("tool_result", (event, ctx) => {
+    const change = pendingFileChanges.get(event.toolCallId);
+    if (!change) return;
+    pendingFileChanges.delete(event.toolCallId);
+    try {
+      const after = readInspectable(change.file);
+      const record = {
+        file: change.file,
+        before: change.before,
+        after,
+        status: !change.before.exists && after.exists ? "created"
+          : change.before.exists && !after.exists ? "deleted"
+          : !change.before.exists && !after.exists ? "unchanged"
+          : change.before.text !== null && after.text !== null && change.before.text === after.text ? "unchanged"
+          : "modified",
+      };
+      const dir = path.join(CHECKPOINT_DIR, "inspections");
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      // Стабильное безопасное имя позволяет видеть правку после открытия истории.
+      const id = crypto.createHash("sha256").update(event.toolCallId).digest("hex");
+      fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify(record), { mode: 0o600 });
+      send(ctx, { kind: "file-inspection", toolCallId: event.toolCallId, inspectionId: id });
+    } catch (error) {
+      send(ctx, { kind: "file-inspection-failed", toolCallId: event.toolCallId, error: String(error) });
+    }
   });
 
   // Подзадачи в отдельном агенте: экономят контекст основного диалога.

@@ -180,7 +180,7 @@ export async function loadPlugins(operator, options) {
           keepAlive: plugin.keepAlive === true,
         });
         running.push(server);
-        summary.push({ ...base, status: "ready", tools: server.tools.length, sleeping: !server.running });
+        summary.push({ ...base, status: "ready", tools: server.tools.length, toolNames: server.toolNames, sleeping: !server.running });
         return;
       }
 
@@ -193,11 +193,13 @@ export async function loadPlugins(operator, options) {
 
       // То, что получает плагин: API оператора и немного своего.
       let count = 0;
+      const toolNames = [];
       const api = {
         operator: {
           ...operator,
           registerTool: (tool) => {
             count++;
+            if (typeof tool?.name === "string") toolNames.push(tool.name);
             return operator.registerTool(tool);
           },
           on: (event, handler) => operator.on(event, handler),
@@ -211,7 +213,7 @@ export async function loadPlugins(operator, options) {
       };
 
       await factory(api);
-      summary.push({ ...base, status: "ready", tools: count });
+      summary.push({ ...base, status: "ready", tools: count, toolNames });
     } catch (error) {
       summary.push({
         ...base,

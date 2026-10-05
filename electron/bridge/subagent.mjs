@@ -7,9 +7,12 @@ import { spawnPortable } from "./platform.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 
 const DEFAULT_TIMEOUT = 600;
+const OBSERVER_PREFIX = "@@desk-subagent@@";
+const OBSERVER_PATH = fileURLToPath(new URL("./subagent-observer.mjs", import.meta.url));
 
 const parameters = Type.Object(
   {
@@ -18,6 +21,7 @@ const parameters = Type.Object(
         "Полная постановка задачи для субагента: что изучить или сделать и что вернуть. " +
         "Субагент не видит текущий диалог, поэтому опиши контекст целиком.",
     }),
+    label: Type.Optional(Type.String({ description: "Короткая роль или название подзадачи для списка субагентов." })),
     cwd: Type.Optional(
       Type.String({ description: "Рабочая папка субагента. По умолчанию — папка текущей сессии." }),
     ),
@@ -53,9 +57,9 @@ export function createSubagentTool() {
     label: "Субагент",
     description:
       "Запускает отдельного агента с чистым контекстом для объёмной подзадачи и возвращает только его итоговый ответ. " +
-      "Бери его для поиска по большому проекту, разбора незнакомого кода, сбора фактов — всё, где промежуточный вывод " +
-      "тебе не нужен и только засорит контекст. Задачу описывай самодостаточно: субагент не видит этот диалог.",
-    promptSnippet: "subagent — подзадача в отдельном агенте, в ответ приходит только итог",
+      "Бери его для сложной или объёмной самостоятельной части работы; независимые части можно поручить нескольким субагентам параллельно. " +
+      "Для короткой задачи работай сам. Задачу описывай самодостаточно: субагент не видит этот диалог.",
+    promptSnippet: "subagent — отдельный агент для сложной подзадачи; независимые подзадачи можно выполнять параллельно",
     parameters,
     executionMode: "parallel",
 
@@ -63,13 +67,19 @@ export function createSubagentTool() {
       const cwd = params.cwd || ctx?.cwd || process.cwd();
       const readOnly = params.readOnly ?? true;
       const limit = (params.timeout ?? DEFAULT_TIMEOUT) * 1000;
+      const steps = [];
+      const details = () => ({ task: params.task, label: params.label || "", cwd, readOnly, steps: steps.slice(-80) });
 
       const launcher = operatorLauncher();
-      const args = [...launcher.prefix, "--print", "--no-session"];
+      const args = [...launcher.prefix, "--print", "--no-session", "-e", OBSERVER_PATH];
       if (readOnly) args.push("--tools", "read,grep,find,ls,read_full");
       args.push(params.task);
 
-      onUpdate?.({ content: [{ type: "text", text: "субагент работает…" }], details: undefined });
+      const update = (answer = "") => onUpdate?.({
+        content: [{ type: "text", text: answer.slice(-400) || "субагент работает…" }],
+        details: details(),
+      });
+      update();
 
       const devNull = fs.openSync(os.devNull, "r");
       const child = spawnPortable(launcher.command, args, {
@@ -83,13 +93,33 @@ export function createSubagentTool() {
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk) => {
         out += chunk;
-        onUpdate?.({
-          content: [{ type: "text", text: out.slice(-400) }],
-          details: undefined,
-        });
+        update(out);
       });
       child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk) => (err += chunk));
+      let stderrBuffer = "";
+      child.stderr.on("data", (chunk) => {
+        stderrBuffer += chunk;
+        let newline;
+        while ((newline = stderrBuffer.indexOf("\n")) >= 0) {
+          const line = stderrBuffer.slice(0, newline).trim();
+          stderrBuffer = stderrBuffer.slice(newline + 1);
+          if (!line.startsWith(OBSERVER_PREFIX)) {
+            err = (err + line + "\n").slice(-4000);
+            continue;
+          }
+          try {
+            const activity = JSON.parse(line.slice(OBSERVER_PREFIX.length));
+            if (activity.kind === "start") {
+              steps.push({ id: activity.id, name: activity.name, subject: activity.subject, done: false, failed: false, summary: "" });
+            } else if (activity.kind === "end") {
+              const step = steps.find((item) => item.id === activity.id);
+              if (step) Object.assign(step, { done: true, failed: activity.failed, summary: activity.summary });
+            }
+            if (steps.length > 80) steps.splice(0, steps.length - 80);
+            update(out);
+          } catch { /* Ignore malformed progress lines. */ }
+        }
+      });
 
       const stop = setTimeout(() => child.kill(), limit);
       const onAbort = () => child.kill();
@@ -118,13 +148,13 @@ export function createSubagentTool() {
             },
           ],
           isError: true,
-          details: { cwd, readOnly },
+          details: details(),
         };
       }
 
       return {
         content: [{ type: "text", text: answer }],
-        details: { cwd, readOnly, task: params.task },
+        details: details(),
       };
     },
   };

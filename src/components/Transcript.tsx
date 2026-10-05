@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
-import type { Entry, Note, Say, ToolRun } from "../types.ts";
+import type { Entry, Note, PluginInfo, Say, ToolRun } from "../types.ts";
 import { LinkCards } from "./LinkCards.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { AttachmentPreview } from "./FileChip.tsx";
 import { Logo } from "./Logo.tsx";
 import { Thinking } from "./Thinking.tsx";
 import { AgentTrace, PixelDots } from "./AgentTrace.tsx";
+import { ToolInspector } from "./ToolInspector.tsx";
 
 function UserTurn({ entry }: { entry: Say }) {
   return (
@@ -98,33 +99,37 @@ function renderEntry(entry: Say | Note, showThinking: boolean) {
   );
 }
 
-/** Пока лента читается из файла сессии, показываем её очертания. */
+/** Очертания переписки, пока десктоп восстанавливает сохранённую сессию. */
 function Skeleton() {
-  const rows = [
-    { width: "38%", align: "flex-end" as const },
-    { width: "92%", align: "flex-start" as const },
-    { width: "76%", align: "flex-start" as const },
-    { width: "54%", align: "flex-end" as const },
-    { width: "88%", align: "flex-start" as const },
-  ];
   return (
-    <div style={{ paddingTop: 8 }}>
-      {rows.map((row, index) => (
-        <div
-          key={index}
-          style={{ display: "flex", justifyContent: row.align, marginBottom: 16 }}
-        >
-          <div
-            className="shimmer"
-            style={{
-              width: row.width,
-              height: 14,
-              borderRadius: 7,
-              animationDelay: `${index * 90}ms`,
-            }}
-          />
+    <div className="session-loading" role="status" aria-live="polite">
+      <div className="session-loading-head">
+        <PixelDots />
+        <div>
+          <strong>Открываю диалог</strong>
+          <span>Загружаю сообщения и действия</span>
         </div>
-      ))}
+      </div>
+      <div className="session-loading-track" aria-hidden><span /></div>
+      <div className="session-loading-preview" aria-hidden>
+        <div className="session-loading-user">
+          <span className="session-loading-bar" style={{ width: "70%" }} />
+          <span className="session-loading-bar" style={{ width: "42%" }} />
+        </div>
+        <div className="session-loading-reply">
+          <span className="session-loading-bar" style={{ width: "92%" }} />
+          <span className="session-loading-bar" style={{ width: "75%" }} />
+          <span className="session-loading-bar" style={{ width: "84%" }} />
+        </div>
+        <div className="session-loading-tool">
+          <span className="session-loading-bar session-loading-square" />
+          <span className="session-loading-bar" style={{ width: "38%" }} />
+        </div>
+        <div className="session-loading-reply">
+          <span className="session-loading-bar" style={{ width: "68%" }} />
+          <span className="session-loading-bar" style={{ width: "48%" }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -136,6 +141,11 @@ export function Transcript({
   loading,
   sending,
   compacting,
+  pluginForTool,
+  onSelectTool,
+  selectedToolId,
+  inspectionRevision,
+  onCloseTool,
 }: {
   entries: Entry[];
   showThinking: boolean;
@@ -143,6 +153,11 @@ export function Transcript({
   loading: boolean;
   sending: boolean;
   compacting: boolean;
+  pluginForTool: (toolName: string) => PluginInfo | undefined;
+  onSelectTool: (run: ToolRun) => void;
+  selectedToolId: string | null;
+  inspectionRevision: number;
+  onCloseTool: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -174,10 +189,10 @@ export function Transcript({
               textAlign: "center",
             }}
           >
-            <div style={{ color: "var(--text)", opacity: 0.85, marginBottom: 18 }}>
-              <Logo size={132} />
+            <div style={{ marginBottom: 12 }}>
+              <Logo size={360} />
             </div>
-            <div style={{ fontSize: 15, color: "var(--text-muted)" }}>Чем займёмся?</div>
+            <div className="hello-heading">Чем займёмся?</div>
             {cwd && (
               <div style={{ marginTop: 7, fontSize: 12.5, color: "var(--text-faint)", fontFamily: "var(--mono)" }}>
                 {cwd}
@@ -187,7 +202,8 @@ export function Transcript({
         )}
         {group(entries).map((item) =>
           Array.isArray(item) ? (
-            <AgentTrace key={item[0].id} runs={item} />
+            <AgentTrace key={item[0].id} runs={item} pluginForTool={pluginForTool} onSelectTool={onSelectTool} selectedToolId={selectedToolId}
+              renderDetails={(run) => <ToolInspector run={run} plugin={pluginForTool(run.name)} revision={inspectionRevision} onClose={onCloseTool} />} />
           ) : (
             renderEntry(item, showThinking)
           ),

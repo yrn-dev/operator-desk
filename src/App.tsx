@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar } from "./components/Sidebar.tsx";
 import { TopBar } from "./components/TopBar.tsx";
 import { Transcript } from "./components/Transcript.tsx";
@@ -7,19 +7,24 @@ import { PermissionDialog } from "./components/PermissionDialog.tsx";
 import { Plugins } from "./components/Plugins.tsx";
 import { KeysDialog } from "./components/KeysDialog.tsx";
 import { Readiness } from "./components/Readiness.tsx";
+import { UsageDialog } from "./components/UsageDialog.tsx";
+import { SubagentPanel } from "./components/SubagentPanel.tsx";
 import { applyEvent, entriesFromMessages, note, speak } from "./lineReducer.ts";
+import { indexPluginTools } from "./pluginTools.ts";
 import type {
   Attachment,
   Checkpoint,
   LineState,
   ModelInfo,
   Job,
+  PluginInfo,
   PluginStatus,
   PermissionAsk,
   Policy,
   ScreenEnv,
   SessionSummary,
   SlashCommand,
+  ToolRun,
 } from "./types.ts";
 
 const MAX_SESSIONS = 8;
@@ -40,14 +45,35 @@ export function App() {
   const [asks, setAsks] = useState<PermissionAsk[]>([]);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [pluginStatuses, setPluginStatuses] = useState<PluginStatus[]>([]);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   const [readyOpen, setReadyOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
+  const [latestVersion, setLatestVersion] = useState<{ version: string; url: string; notes?: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedTool, setSelectedTool] = useState<{ lineId: string; toolId: string } | null>(null);
+  const [inspectionRevision, setInspectionRevision] = useState(0);
+  const [subagentPanelOpen, setSubagentPanelOpen] = useState(true);
+  const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
+  const previousSubagentCount = useRef(0);
   const counter = useRef(0);
   const kickoff = useRef(false);
   const homeDir = useRef("");
+  const pluginForTool = useMemo(() => indexPluginTools(plugins, pluginStatuses), [plugins, pluginStatuses]);
+
+  useEffect(() => {
+    let live = true;
+    const refresh = () => {
+      void window.operator.listPlugins().then((items) => {
+        if (live) setPlugins(items);
+      }).catch(() => {});
+    };
+    const off = window.operator.onPluginIcons(refresh);
+    refresh();
+    return () => { live = false; off(); };
+  }, [mcpOpen]);
 
   const patch = useCallback((id: string, change: (line: LineState) => LineState) => {
     setLines((prev) => {
@@ -78,6 +104,13 @@ export function App() {
     });
   }, []);
 
+  useEffect(() => {
+    void window.operator.usagePreference().then((pref) => {
+      if (pref.configured && pref.enabled === null) setUsageOpen(true);
+    });
+    void window.operator.latestVersion().then(setLatestVersion);
+  }, []);
+
   // Запросы разрешений и служебные сигналы моста.
   useEffect(() => {
     const offAsk = window.operator.onBridgeAsk(({ id, request }) => {
@@ -96,6 +129,7 @@ export function App() {
     });
 
     const offSignal = window.operator.onBridgeSignal(({ signal }) => {
+      if (signal.kind === "file-inspection") setInspectionRevision((value) => value + 1);
       if (signal.kind === "checkpoint") {
         setCheckpoints((prev) => [
           { id: signal.id, tool: signal.tool, file: signal.file, existed: signal.existed, at: signal.at },
@@ -252,7 +286,17 @@ export function App() {
   }, []);
 
   const active = activeId ? lines.get(activeId) : undefined;
+  const subagentRuns = useMemo(
+    () => active?.entries.filter((entry): entry is ToolRun => entry.kind === "tool" && entry.name === "subagent") ?? [],
+    [active?.entries],
+  );
 
+  useEffect(() => {
+    if (subagentRuns.length > previousSubagentCount.current) setSubagentPanelOpen(true);
+    previousSubagentCount.current = subagentRuns.length;
+  }, [activeId, subagentRuns.length]);
+
+  useEffect(() => { setSelectedSubagentId(null); }, [activeId]);
   const call = useCallback(
     async (command: string, payload?: Record<string, unknown>) => {
       if (!activeId) return null;
@@ -399,6 +443,8 @@ export function App() {
 
       {readyOpen && <Readiness onClose={() => setReadyOpen(false)} />}
 
+      {usageOpen && <UsageDialog onClose={() => setUsageOpen(false)} />}
+
       {toast && (
         <div
           className="enter"
@@ -514,6 +560,10 @@ export function App() {
           mcpCount={pluginStatuses.filter((item) => item.status === "ready").length}
           onOpenMcp={() => setMcpOpen(true)}
           onOpenReadiness={() => setReadyOpen(true)}
+          onOpenUsage={() => setUsageOpen(true)}
+          subagentCount={subagentRuns.length}
+          subagentsOpen={subagentPanelOpen}
+          onToggleSubagents={() => setSubagentPanelOpen((open) => !open)}
           onCompact={() => call("compact")}
           onNewSession={async () => {
             if (activeId) patch(activeId, (line) => ({ ...line, entries: [], contextUsed: 0 }));
@@ -529,7 +579,27 @@ export function App() {
           }}
         />
 
+        {latestVersion && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--line)", background: "var(--bg-raised)", color: "var(--text-muted)", fontSize: 12.5 }}>
+            <span style={{ flex: 1 }}>Доступен Operator {latestVersion.version}{latestVersion.notes ? ` · ${latestVersion.notes}` : ""}</span>
+            <button onClick={() => void window.operator.openLink(latestVersion.url)} style={{ color: "var(--text)", textDecoration: "underline" }}>Скачать обновление</button>
+            <button onClick={() => setLatestVersion(null)} aria-label="Скрыть уведомление" style={{ color: "var(--text-faint)", fontSize: 17 }}>×</button>
+          </div>
+        )}
+
         <Transcript
+          pluginForTool={pluginForTool}
+          onSelectTool={(run) => {
+            if (run.name === "subagent") {
+              setSelectedSubagentId(run.id);
+              setSubagentPanelOpen(true);
+            } else if (activeId) {
+              setSelectedTool((current) => current?.lineId === activeId && current.toolId === run.id ? null : { lineId: activeId, toolId: run.id });
+            }
+          }}
+          selectedToolId={selectedTool?.lineId === activeId ? selectedTool.toolId : null}
+          inspectionRevision={inspectionRevision}
+          onCloseTool={() => setSelectedTool(null)}
           sending={active?.sending === true}
           compacting={active?.compacting === true}
           loading={active?.loading === true}
@@ -584,6 +654,10 @@ export function App() {
           onAbort={() => call("abort")}
         />
       </main>
+      {subagentRuns.length > 0 && subagentPanelOpen && (
+        <SubagentPanel key={activeId ?? ""} runs={subagentRuns} selectedId={selectedSubagentId}
+          onSelect={setSelectedSubagentId} onClose={() => setSubagentPanelOpen(false)} />
+      )}
     </div>
   );
 }

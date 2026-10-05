@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld("operator", {
   reveal: (path: string) => ipcRenderer.invoke("shell:reveal", { path }),
   linkPreview: (url: string) => ipcRenderer.invoke("link:preview", { url }),
   openLink: (url: string) => ipcRenderer.invoke("link:open", { url }),
+  usagePreference: () => ipcRenderer.invoke("usage:preference"),
+  setUsagePreference: (enabled: boolean) => ipcRenderer.invoke("usage:set", enabled),
+  latestVersion: () => ipcRenderer.invoke("app:latestVersion"),
   generateTitle: (firstMessage: string, cwd: string): Promise<string | null> =>
     ipcRenderer.invoke("session:title", { firstMessage, cwd }),
   attachPaths: (paths: string[]) => ipcRenderer.invoke("files:attach", { paths }),
@@ -66,6 +69,7 @@ contextBridge.exposeInMainWorld("operator", {
     ipcRenderer.invoke("policy:remember", { tool, subject }),
   restoreCheckpoint: (id: string, file: string, existed: boolean) =>
     ipcRenderer.invoke("checkpoint:restore", { id, file, existed }),
+  toolInspection: (toolCallId: string) => ipcRenderer.invoke("tool:inspection", toolCallId),
   onFatal: (listener: Listener<{ id: string; message: string }>) => subscribe("line:fatal", listener),
   onExit: (listener: Listener<{ id: string; code: number | null; stderr: string }>) =>
     subscribe("line:exit", listener),

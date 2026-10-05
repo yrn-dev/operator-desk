@@ -172,7 +172,9 @@ export function applyEvent(state: LineState, event: Record<string, any>): LineSt
       return {
         ...state,
         entries: entries.map((e) =>
-          e.kind === "tool" && e.id === event.toolCallId ? { ...e, output } : e,
+          e.kind === "tool" && e.id === event.toolCallId
+            ? { ...e, output, details: event.partialResult?.details ?? e.details }
+            : e,
         ),
       };
     }
@@ -188,6 +190,7 @@ export function applyEvent(state: LineState, event: Record<string, any>): LineSt
                 output: output || e.output,
                 done: true,
                 failed: Boolean(event.isError),
+                details: event.result?.details ?? e.details,
                 endedAt: Date.now(),
               }
             : e,
@@ -269,6 +272,7 @@ export function entriesFromMessages(payload: any): Entry[] {
       if (!run) continue;
       run.output = resultText(message);
       run.failed = Boolean(message.isError);
+      run.details = message.details;
     }
   }
 

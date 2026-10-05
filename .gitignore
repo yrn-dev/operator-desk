@@ -4,3 +4,6 @@ dist-electron/
 release/
 vendor/
 *.log
+__pycache__/
+*.pyc
+service/*.db*

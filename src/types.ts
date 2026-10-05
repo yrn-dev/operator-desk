@@ -13,9 +13,35 @@ export type ToolRun = {
   output: string;
   done: boolean;
   failed: boolean;
+  /** Structured progress from tools such as subagent, saved with the result. */
+  details?: unknown;
   /** Время вызова и ответа — из них считается длительность в ленте. */
   startedAt?: number;
   endedAt?: number;
+};
+
+export type SubagentStep = {
+  id: string;
+  name: string;
+  subject: string;
+  done: boolean;
+  failed: boolean;
+  summary: string;
+};
+
+export type SubagentDetails = {
+  task: string;
+  label: string;
+  cwd: string;
+  readOnly: boolean;
+  steps: SubagentStep[];
+};
+
+export type FileInspection = {
+  file: string;
+  status: "created" | "deleted" | "modified" | "unchanged";
+  before: { exists: boolean; text: string | null; reason: string | null };
+  after: { exists: boolean; text: string | null; reason: string | null };
 };
 
 export type Say = {
@@ -144,6 +170,8 @@ export type PluginStatus = {
   kind: string;
   status: "ready" | "error" | "off";
   tools: number;
+  /** Точные имена инструментов, зарегистрированных этим плагином. */
+  toolNames?: string[];
   /** Инструменты известны из кеша, сам сервер ещё не запущен. */
   sleeping?: boolean;
   error?: string;
@@ -200,6 +228,9 @@ declare global {
       reveal(path: string): Promise<void>;
       linkPreview(url: string): Promise<LinkPreview | null>;
       openLink(url: string): Promise<void>;
+      usagePreference(): Promise<{ enabled: boolean | null; configured: boolean }>;
+      setUsagePreference(enabled: boolean): Promise<{ enabled: boolean | null; configured: boolean }>;
+      latestVersion(): Promise<{ version: string; url: string; notes?: string } | null>;
       generateTitle(firstMessage: string, cwd: string): Promise<string | null>;
       attachPaths(paths: string[]): Promise<Attachment[]>;
       pathForFile(file: File): string;
@@ -223,6 +254,7 @@ declare global {
       setPolicy(policy: Partial<Policy>): Promise<Policy>;
       rememberRule(tool: string, subject: string): Promise<Policy>;
       restoreCheckpoint(id: string, file: string, existed: boolean): Promise<{ ok: boolean }>;
+      toolInspection(toolCallId: string): Promise<FileInspection | null>;
       onFatal(listener: (payload: { id: string; message: string }) => void): () => void;
       onExit(listener: (payload: { id: string; code: number | null; stderr: string }) => void): () => void;
     };

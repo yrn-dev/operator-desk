@@ -19,6 +19,10 @@ export function TopBar({
   mcpCount,
   onOpenMcp,
   onOpenReadiness,
+  onOpenUsage,
+  subagentCount,
+  subagentsOpen,
+  onToggleSubagents,
 }: {
   line: LineState | undefined;
   sidebarCollapsed: boolean;
@@ -29,6 +33,10 @@ export function TopBar({
   mcpCount: number;
   onOpenMcp: () => void;
   onOpenReadiness: () => void;
+  onOpenUsage: () => void;
+  subagentCount: number;
+  subagentsOpen: boolean;
+  onToggleSubagents: () => void;
 }) {
   const [menu, setMenu] = useState<"model" | "more" | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -126,6 +134,14 @@ export function TopBar({
 
       <div style={{ flex: 1 }} />
 
+      {subagentCount > 0 && (
+        <button className={`control control-ghost subagent-toggle${subagentsOpen ? " is-active" : ""}`} onClick={onToggleSubagents}
+          aria-pressed={subagentsOpen} title="Показать субагентов">
+          <span className="subagent-toggle-dots" aria-hidden><i /><i /><i /></span>
+          Субагенты <span className="subagent-toggle-count">{subagentCount}</span>
+        </button>
+      )}
+
       {jobs.some((job) => job.alive) && (
         <span
           title={jobs.filter((job) => job.alive).map((job) => job.name).join("\n")}
@@ -211,6 +227,14 @@ export function TopBar({
               }}
             >
               Готовность
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                onOpenUsage();
+                setMenu(null);
+              }}
+            >
+              Статистика использования
             </MenuItem>
           </Menu>
         )}
