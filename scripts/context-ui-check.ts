@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import { applyEvent, entriesFromMessages } from "../src/lineReducer.ts";
+import { userError } from "../src/userError.ts";
+import type { LineState } from "../src/types.ts";
+const base = { entries: [], contextUsed: 123, lamp: "live" } as unknown as LineState;
+assert.equal(applyEvent(base, { type: "agent_end", willRetry: true }).lamp, "live");
+assert.equal(applyEvent(base, { type: "agent_end", willRetry: false }).lamp, "ready");
+assert.equal(applyEvent(base, { type: "auto_continue_start" }).lamp, "live");
+assert.equal(applyEvent(base, { type: "auto_continue_end" }).lamp, "ready");
+const failed = applyEvent(base, { type: "message_end", message: { role: "assistant", content: [],
+  usage: { input: 0, output: 0 }, stopReason: "error", errorMessage: "Connection error" } });
+assert.equal(failed.contextUsed, 123);
+const failureNote = failed.entries.find(entry => entry.kind === "note");
+assert.ok(failureNote?.kind === "note" && /Не удалось подключиться/.test(failureNote.text));
+assert.equal(failureNote?.kind === "note" && failureNote.icon, "connection");
+assert.ok(!JSON.stringify(failed.entries).includes("Connection error"));
+assert.match(userError("Request timed out", true), /Нет подключения к интернету/);
+assert.match(userError("net::ERR_INTERNET_DISCONNECTED", false), /Нет подключения к интернету/);
+assert.match(userError(new Error("Error invoking remote method 'line:send': Error: Request timed out"), false), /не ответил вовремя/);
+assert.doesNotMatch(userError("Request timed out", false), /Нет подключения к интернету/);
+assert.match(userError("socket hang up", false), /Соединение.*прервалось/);
+assert.match(userError("401 Invalid API key", true), /ключ доступа/);
+assert.match(userError("No API key found", false), /Не указан ключ/);
+assert.match(userError("429 Too many requests", false), /Слишком много запросов/);
+assert.match(userError("429 You exceeded your current quota", false), /Закончился доступный лимит/);
+assert.match(userError("503 Service unavailable", false), /временно недоступен/);
+assert.match(userError("Оператор не ответил на «get_state» за 30 с.", true), /Агент долго не отвечает/);
+assert.doesNotMatch(userError("UnknownException: request failed sk-private-test", false), /UnknownException|sk-private-test/);
+const restored = entriesFromMessages([{ role: "assistant", content: [], stopReason: "error", errorMessage: "Request timed out" }]);
+assert.ok(restored.some(entry => entry.kind === "note" && /не ответил вовремя/.test(entry.text)));
+assert.ok(restored.some(entry => entry.kind === "note" && entry.icon === "timeout"));
+const compactFailure = applyEvent(base, { type: "compaction_end", errorMessage: "Connection error" });
+assert.ok(compactFailure.entries.some(entry => entry.kind === "note" && /Не удалось сократить переписку.*Не удалось подключиться/.test(entry.text)));
+const cached = applyEvent(base, { type: "message_end", message: { role: "assistant", content: [],
+  usage: { input: 10, output: 20, cacheRead: 100, cacheWrite: 2 } } });
+assert.equal(cached.contextUsed, 132);
+assert.equal(applyEvent(base, { type: "compaction_start" }).lamp, "live");
+const compressing = applyEvent({ ...base, sending: true }, { type: "compaction_start" });
+assert.equal(compressing.compacting, true);
+assert.equal(compressing.sending, false);
+const recovered = applyEvent(compressing, { type: "compaction_end", willRetry: true,
+  result: { estimatedTokensAfter: 14500, details: { recovery: "local" } } });
+assert.equal(recovered.contextUsed, 14500);
+assert.equal(recovered.lamp, "live");
+assert.equal(recovered.compacting, false);
+assert.ok(recovered.entries.some(entry => entry.kind === "note" && entry.tone === "info" && entry.icon === "context" && /Продолжаю задачу/.test(entry.text)));
+assert.equal(applyEvent(compressing, { type: "compaction_end", aborted: true }).lamp, "ready");
+console.log("PASS readable live/history errors, offline vs timeout, service/key/quota failures, retry/continuation UI and context accounting");

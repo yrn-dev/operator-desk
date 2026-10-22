@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Entry, Note, PluginInfo, Say, ToolRun } from "../types.ts";
 import { LinkCards } from "./LinkCards.tsx";
 import { Markdown } from "./Markdown.tsx";
@@ -7,8 +7,9 @@ import { Logo } from "./Logo.tsx";
 import { Thinking } from "./Thinking.tsx";
 import { AgentTrace, PixelDots } from "./AgentTrace.tsx";
 import { ToolInspector } from "./ToolInspector.tsx";
+import { NoticeCard } from "./NoticeCard.tsx";
 
-function UserTurn({ entry }: { entry: Say }) {
+const UserTurn = memo(function UserTurn({ entry }: { entry: Say }) {
   return (
     <div className="enter" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 22 }}>
       <div
@@ -41,9 +42,9 @@ function UserTurn({ entry }: { entry: Say }) {
       </div>
     </div>
   );
-}
+});
 
-function AgentTurn({ entry, showThinking }: { entry: Say; showThinking: boolean }) {
+const AgentTurn = memo(function AgentTurn({ entry, showThinking }: { entry: Say; showThinking: boolean }) {
   const text = entry.text.trim();
   if (!text && !(showThinking && entry.thinking.trim())) return null;
   return (
@@ -51,13 +52,33 @@ function AgentTurn({ entry, showThinking }: { entry: Say; showThinking: boolean 
       {showThinking && <Thinking text={entry.thinking} live={entry.streaming && !text} />}
       {text && (
         <>
-          <Markdown text={text} />
+          <Markdown text={text} streaming={entry.streaming} />
           {entry.streaming ? <span className="caret" /> : <LinkCards text={text} />}
         </>
       )}
     </div>
   );
-}
+});
+
+type ToolGroupProps = {
+  runs: ToolRun[];
+  pluginForTool: (toolName: string) => PluginInfo | undefined;
+  onSelectTool: (run: ToolRun) => void;
+  selectedToolId: string | null;
+  inspectionRevision: number;
+  onCloseTool: () => void;
+};
+const ToolGroup = memo(function ToolGroup({ runs, pluginForTool, onSelectTool, selectedToolId, inspectionRevision, onCloseTool }: ToolGroupProps) {
+  return <AgentTrace runs={runs} pluginForTool={pluginForTool} onSelectTool={onSelectTool} selectedToolId={selectedToolId}
+    renderDetails={(run) => <ToolInspector run={run} plugin={pluginForTool(run.name)} revision={inspectionRevision} onClose={onCloseTool} />} />;
+}, (a, b) => a.pluginForTool === b.pluginForTool && a.onSelectTool === b.onSelectTool &&
+  a.selectedToolId === b.selectedToolId && a.inspectionRevision === b.inspectionRevision &&
+  a.onCloseTool === b.onCloseTool && a.runs.length === b.runs.length && a.runs.every((run, i) => run === b.runs[i]));
+
+// Keep the current conversation small in the DOM. Earlier messages remain in
+// the session and can be revealed without another model request.
+const VISIBLE_GROUPS = 90;
+const groupId = (item: Say | Note | ToolRun[]) => Array.isArray(item) ? item[0].id : item.id;
 
 /** Инструменты, вызванные подряд, показываются одним ходом работы. */
 function group(entries: Entry[]): Array<Say | Note | ToolRun[]> {
@@ -82,21 +103,7 @@ function renderEntry(entry: Say | Note, showThinking: boolean) {
       <AgentTurn key={entry.id} entry={entry} showThinking={showThinking} />
     );
   }
-  return (
-    <div
-      key={entry.id}
-      style={{
-        marginBottom: 14,
-        padding: "9px 12px",
-        borderRadius: "var(--radius)",
-        border: "1px solid var(--line)",
-        fontSize: 13,
-        color: entry.tone === "alarm" ? "var(--error)" : "var(--text-muted)",
-      }}
-    >
-      {entry.text}
-    </div>
-  );
+  return <NoticeCard key={entry.id} entry={entry} />;
 }
 
 /** Очертания переписки, пока десктоп восстанавливает сохранённую сессию. */
@@ -134,7 +141,7 @@ function Skeleton() {
   );
 }
 
-export function Transcript({
+export const Transcript = memo(function Transcript({
   entries,
   showThinking,
   cwd,
@@ -161,20 +168,40 @@ export function Transcript({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  const groups = useMemo(() => group(entries), [entries]);
+  const [firstVisible, setFirstVisible] = useState<string | null>(null);
+  const anchored = firstVisible === null ? -1 : groups.findIndex((item) => groupId(item) === firstVisible);
+  const start = anchored >= 0 ? anchored : Math.max(0, groups.length - VISIBLE_GROUPS);
+  const prepend = useRef<{ height: number; top: number } | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [entries]);
+    if (!el) return;
+    if (prepend.current) {
+      el.scrollTop = prepend.current.top + el.scrollHeight - prepend.current.height;
+      prepend.current = null;
+    } else if (stick.current) el.scrollTop = el.scrollHeight;
+  }, [entries, firstVisible]);
 
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
-    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
+    if (stick.current && !bottom && groups[start]) setFirstVisible(groupId(groups[start]));
+    if (!stick.current && bottom) setFirstVisible(null);
+    stick.current = bottom;
+  };
+
+  const showPrevious = () => {
+    const el = scroller.current;
+    if (!el || start === 0) return;
+    stick.current = false;
+    prepend.current = { height: el.scrollHeight, top: el.scrollTop };
+    setFirstVisible(groupId(groups[Math.max(0, start - VISIBLE_GROUPS)]));
   };
 
   return (
-    <div ref={scroller} onScroll={onScroll} style={{ flex: 1, overflowY: "auto" }}>
+    <div ref={scroller} onScroll={onScroll} style={{ flex: 1, overflowY: "auto", overflowAnchor: "none" }}>
       <div className="feed" style={{ maxWidth: "var(--measure)", margin: "0 auto", padding: "26px 24px 22px" }}>
         {loading && entries.length === 0 && <Skeleton />}
 
@@ -200,10 +227,13 @@ export function Transcript({
             )}
           </div>
         )}
-        {group(entries).map((item) =>
+        {start > 0 && <button type="button" className="history-more" onClick={showPrevious}>
+          Показать предыдущие сообщения
+        </button>}
+        {groups.slice(start).map((item) =>
           Array.isArray(item) ? (
-            <AgentTrace key={item[0].id} runs={item} pluginForTool={pluginForTool} onSelectTool={onSelectTool} selectedToolId={selectedToolId}
-              renderDetails={(run) => <ToolInspector run={run} plugin={pluginForTool(run.name)} revision={inspectionRevision} onClose={onCloseTool} />} />
+            <ToolGroup key={item[0].id} runs={item} pluginForTool={pluginForTool} onSelectTool={onSelectTool} selectedToolId={selectedToolId}
+              inspectionRevision={inspectionRevision} onCloseTool={onCloseTool} />
           ) : (
             renderEntry(item, showThinking)
           ),
@@ -212,10 +242,10 @@ export function Transcript({
         {(sending || compacting) && (
           <div className="sending" role="status" aria-live="polite">
             <PixelDots />
-            <span className="sending-label">{compacting ? "Сжимаю контекст" : "Отправляется"}</span>
+            <span className="sending-label">{compacting ? "Сохраняю важное из переписки…" : "Отправляется"}</span>
           </div>
         )}
       </div>
     </div>
   );
-}
+});

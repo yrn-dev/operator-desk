@@ -1,3 +1,5 @@
+import type { UserErrorKind } from "./userError.ts";
+
 export type Attachment =
   | { kind: "file"; path: string; name: string }
   | { kind: "folder"; path: string; name: string }
@@ -60,6 +62,7 @@ export type Note = {
   id: string;
   tone: "info" | "alarm";
   text: string;
+  icon?: UserErrorKind;
 };
 
 export type Entry = Say | ToolRun | Note;
@@ -125,7 +128,7 @@ export type ScreenEnv = { screenshot: string[]; input: string | null; missing: s
 
 export type Policy = {
   computerUse?: boolean;
-  rules: Array<{ tool?: string; pattern?: string; action: "allow" | "ask" | "deny" }>;
+  rules: Array<{ tool?: string; subject?: string; pattern?: string; action: "allow" | "ask" | "deny" }>;
 };
 
 export type PermissionAsk = {

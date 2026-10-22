@@ -9,7 +9,7 @@ marked.setOptions({ gfm: true, breaks: true });
  * Ответ модели — markdown. Содержимое чистится, код подсвечивается,
  * к каждому блоку кода добавляется кнопка копирования.
  */
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
 
   const html = useMemo(() => {
@@ -24,7 +24,7 @@ export function Markdown({ text }: { text: string }) {
     const blocks = [...root.querySelectorAll<HTMLElement>("pre > code")];
 
     // Грамматики подгружаются один раз и только если код в ответе есть.
-    if (blocks.some((block) => !block.dataset.highlighted)) {
+    if (!streaming && blocks.some((block) => !block.dataset.highlighted)) {
       void highlighter().then((hljs) => {
         for (const block of blocks) {
           if (block.dataset.highlighted) continue;
@@ -58,7 +58,7 @@ export function Markdown({ text }: { text: string }) {
       };
       pre.appendChild(button);
     }
-  }, [html]);
+  }, [html, streaming]);
 
   return <div ref={host} className="md" dangerouslySetInnerHTML={{ __html: html }} />;
 }

@@ -1,6 +1,6 @@
 {
   "name": "operator-desk",
-  "version": "0.3.3",
+  "version": "0.3.5",
   "description": "Operator — настольное приложение для ИИ-агента operator",
   "desktopName": "operator-desk.desktop",
   "main": "dist-electron/main.js",
@@ -19,6 +19,10 @@
     "prepack": "node scripts/bundle-operator.mjs",
     "dist:linux:rpm": "node scripts/bundle-operator.mjs && vite build && electron-builder --linux rpm",
     "check:platform": "node scripts/platform-check.mjs",
+    "check:policy": "node scripts/policy-regression-check.mjs",
+    "check:rpc": "node --import tsx scripts/rpc-timeout-check.ts",
+    "check:compaction": "node scripts/compaction-recovery-check.mjs",
+    "check:context-budget": "node scripts/context-budget-check.mjs",
     "zip:source": "rm -f ../operator-desk-source.zip && zip -rq ../operator-desk-source.zip . -x 'node_modules/*' -x 'dist/*' -x 'dist-electron/*' -x 'release/*' -x 'vendor/*' -x '.git/*' && echo '../operator-desk-source.zip готов'",
     "dist:linux:pacman": "node scripts/bundle-operator.mjs && vite build && electron-builder --linux pacman"
   },
@@ -173,6 +177,8 @@
       }
     ],
     "nsis": {
+      "include": "build/installer.nsh",
+      "installerLanguages": ["ru_RU", "en_US"],
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

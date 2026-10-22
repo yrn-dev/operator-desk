@@ -1,4 +1,5 @@
 import type { Attachment, Entry, LineState, Say, ToolRun } from "./types.ts";
+import { describeUserError, type UserErrorKind } from "./userError.ts";
 
 type Block = { type: string; text?: string; thinking?: string };
 
@@ -50,17 +51,6 @@ const nextId = () => `e${++counter}`;
 /** Переполнение контекста: оператор сам сожмёт его и повторит запрос. */
 const OVERFLOW = /context length|context window|ContextWindowExceeded|too many tokens|prompt is too long/i;
 
-/** Текст ошибки провайдера без служебного хвоста LiteLLM. */
-function shortError(message: string): string {
-  const text = message
-    .replace(/No fallback model group found[\s\S]*$/i, "")
-    .replace(/^\d{3}\s+/, "")
-    .replace(/litellm\.\w+:\s*/gi, "")
-    .replace(/OpenAIException\s*-\s*/gi, "")
-    .trim();
-  return text.length > 400 ? `${text.slice(0, 400)}…` : text;
-}
-
 /** Переводит поток событий agent → ленту переговоров. */
 export function applyEvent(state: LineState, event: Record<string, any>): LineState {
   const entries = state.entries;
@@ -86,8 +76,8 @@ export function applyEvent(state: LineState, event: Record<string, any>): LineSt
     case "agent_end":
       return {
         ...state,
-        lamp: "ready",
-        entries: entries.map((e) => (e.kind === "say" ? { ...e, streaming: false } : e)),
+        lamp: event.willRetry || state.compacting ? "live" : "ready",
+        entries: entries.map((e) => (e.kind === "say" && e.streaming ? { ...e, streaming: false } : e)),
       };
 
     case "message_start": {
@@ -114,10 +104,9 @@ export function applyEvent(state: LineState, event: Record<string, any>): LineSt
       if (event.message?.role !== "assistant") return state;
       const { text, thinking } = collect(event.message);
       const usage = event.message?.usage;
-      const contextUsed =
-        usage && typeof usage.input === "number"
-          ? usage.input + (usage.output ?? 0)
-          : state.contextUsed;
+      const measured = usage ? (usage.totalTokens ||
+        (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0)) : 0;
+      const contextUsed = measured > 0 ? measured : state.contextUsed;
 
       let nextEntries = entries;
       if (last?.kind === "say" && last.role === "operator") {
@@ -132,25 +121,35 @@ export function applyEvent(state: LineState, event: Record<string, any>): LineSt
       if (event.message?.stopReason === "error") {
         const reason = String(event.message?.errorMessage ?? "неизвестная ошибка");
         return OVERFLOW.test(reason)
-          ? note(next, "Контекст переполнен — сжимаю его и повторю запрос.")
-          : note(next, `Модель ответила ошибкой: ${shortError(reason)}`, "alarm");
+          ? note(next, "Контекст переполнен — сжимаю его и повторю запрос.", "info", "context")
+          : errorNote(next, reason);
       }
       return next;
     }
 
     case "compaction_start":
-      return { ...state, compacting: true };
+      return { ...state, compacting: true, sending: false, lamp: "live" };
+
+    case "auto_continue_start":
+      return note({ ...state, lamp: "live" }, "Достигнут лимит одного ответа — продолжаю задачу автоматически.");
+
+    case "auto_continue_end":
+      return note({ ...state, lamp: "ready" }, "Модель несколько раз исчерпала лимит ответа подряд. Автопродолжение остановлено, чтобы избежать зацикливания.", "alarm");
 
     case "compaction_end": {
       // С повтором оператор сразу продолжит ход — линия остаётся занятой.
-      const next = { ...state, compacting: false, lamp: event.willRetry ? ("live" as const) : ("ready" as const) };
+      const next = { ...state, compacting: false, sending: false, lamp: event.willRetry ? ("live" as const) : ("ready" as const) };
       if (event.aborted) return note(next, "Сжатие контекста отменено.");
       if (event.errorMessage) {
-        return note(next, `Не удалось сжать контекст: ${shortError(String(event.errorMessage))}`, "alarm");
+        return errorNote(next, event.errorMessage, "Не удалось сократить переписку. ");
       }
       if (!event.result) return next;
-      // Точный размер станет известен со следующим ответом модели.
-      return note({ ...next, contextUsed: 0 }, "Контекст сжат: старая часть диалога заменена краткой сводкой.");
+      const contextUsed = typeof event.result.estimatedTokensAfter === "number"
+        ? event.result.estimatedTokensAfter : next.contextUsed;
+      const message = event.result.details?.recovery === "local"
+        ? "Не удалось получить сводку от ИИ-сервиса. Сохранил краткий контекст локально. Полная история на месте."
+        : "Сохранил важное из переписки. Полная история на месте.";
+      return note({ ...next, contextUsed }, message + (event.willRetry ? " Продолжаю задачу." : ""), "info", "context");
     }
 
     case "tool_execution_start": {
@@ -189,7 +188,7 @@ export function applyEvent(state: LineState, event: Record<string, any>): LineSt
                 ...e,
                 output: output || e.output,
                 done: true,
-                failed: Boolean(event.isError),
+                failed: Boolean(event.isError || event.result?.isError),
                 details: event.result?.details ?? e.details,
                 endedAt: Date.now(),
               }
@@ -203,9 +202,14 @@ export function applyEvent(state: LineState, event: Record<string, any>): LineSt
   }
 }
 
-export function note(state: LineState, text: string, tone: "info" | "alarm" = "info"): LineState {
-  const entry: Entry = { kind: "note", id: nextId(), tone, text };
+export function note(state: LineState, text: string, tone: "info" | "alarm" = "info", icon?: UserErrorKind): LineState {
+  const entry: Entry = { kind: "note", id: nextId(), tone, text, ...(icon ? { icon } : {}) };
   return { ...state, entries: [...state.entries, entry] };
+}
+
+export function errorNote(state: LineState, error: unknown, prefix = ""): LineState {
+  const failure = describeUserError(error);
+  return note(state, prefix + failure.message, "alarm", failure.kind);
 }
 
 export function speak(state: LineState, text: string, attachments: Attachment[] = []): LineState {
@@ -248,6 +252,10 @@ export function entriesFromMessages(payload: any): Entry[] {
       const { text, thinking } = collect(message);
       if (text.trim() || thinking.trim()) {
         entries.push({ kind: "say", id: nextId(), role: "operator", text, thinking, streaming: false });
+      }
+      if (message.stopReason === "error") {
+        const failure = describeUserError(message.errorMessage, false);
+        entries.push({ kind: "note", id: nextId(), tone: "alarm", text: failure.message, icon: failure.kind });
       }
       const blocks: any[] = Array.isArray(message.content) ? message.content : [];
       for (const block of blocks) {

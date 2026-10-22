@@ -692,6 +692,22 @@ textarea {
 }
 .trace-fold-inner { min-height: 0; overflow: hidden; }
 
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.notice-alarm { color: var(--error); }
+.notice-icon { display: flex; flex: none; margin-top: 1px; }
+.notice-text { min-width: 0; overflow-wrap: anywhere; }
+
 .trace-item { display: flex; flex-direction: column; animation: agent-fade var(--normal) var(--ease) both; }
 
 .trace-row {
@@ -1141,3 +1157,15 @@ textarea {
 /* Tool results expand in the conversation, directly below the chosen action. */
 .trace-inline-details { margin: 6px 0 14px 21px; max-width: min(calc(100% - 21px), 720px); }
 @media (max-width: 640px) { .trace-inline-details { margin-left: 0; max-width: 100%; } }
+/* Earlier history is expanded on demand to keep long sessions responsive. */
+.history-more {
+  display: block;
+  margin: 0 auto 22px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  font-size: 12.5px;
+}
+.history-more:hover { color: var(--text); border-color: var(--text-faint); }

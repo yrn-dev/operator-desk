@@ -159,6 +159,10 @@ export function presentTool(run: ToolRun, plugin?: PluginInfo): ToolPresentation
     Object.assign(base, { title: "Запустил фоновую задачу", action: "Запустил команду в фоне", subject: arg("command"), resultKind: "text", resultTitle: "Состояние задачи" });
   } else if (name === "background_check" || name === "background_stop") {
     Object.assign(base, { title: name === "background_check" ? "Проверил фоновую задачу" : "Остановил фоновую задачу", action: name === "background_check" ? "Проверил выполнение фоновой команды" : "Остановил выполнение фоновой команды", resultKind: "text", resultTitle: "Состояние задачи" });
+  } else if (name === "browser") {
+    const action = arg("action");
+    const actions: Record<string, string> = { tabs: "Просмотр вкладок", open: "Открытие страницы", navigate: "Переход на страницу", snapshot: "Чтение страницы", click: "Нажатие элемента", fill: "Заполнение поля", select: "Выбор значения", scroll: "Прокрутка страницы", back: "Возврат назад", close: "Закрытие вкладки" };
+    Object.assign(base, { title: actions[action] ?? "Браузер", action: actions[action] ?? "Работа с браузером", subject: arg("url") || arg("tab"), resultKind: "text", resultTitle: "Состояние страницы" });
   } else if (name === "computer") {
     const action = arg("action");
     const actions: Record<string, string> = { screenshot: "Сделал снимок экрана", click: "Нажал на экран", type: "Ввёл текст", key: "Нажал клавиши", scroll: "Прокрутил экран", open: "Открыл приложение", windows: "Получил список окон", wait: "Подождал" };

@@ -19,6 +19,7 @@ import { ToolIcon } from "./ToolIcon.tsx";
 
 const TITLES: Record<string, string> = {
   bash: "Выполняю",
+  background_run: "Запускаю фоновую задачу",
   read: "Читаю",
   write: "Пишу",
   edit: "Правлю",
@@ -276,7 +277,7 @@ function TraceRow({ run, plugin, onSelect, selected, details }: { run: ToolRun; 
               </span>
               <Chevron open={selected} />
             </>
-          ) : running ? (
+          ) : running && run.name !== "background_run" ? (
             <PixelDots />
           ) : run.failed ? (
             <Alert />

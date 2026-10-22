@@ -178,6 +178,7 @@ export async function loadPlugins(operator, options) {
           cacheFile: dataDir ? path.join(dataDir, "tools", `${plugin.id}.json`) : undefined,
           idleTimeout: Number(plugin.idleTimeout) > 0 ? Number(plugin.idleTimeout) * 1000 : undefined,
           keepAlive: plugin.keepAlive === true,
+          discovery: options.discovery,
         });
         running.push(server);
         summary.push({ ...base, status: "ready", tools: server.tools.length, toolNames: server.toolNames, sleeping: !server.running });

@@ -9,7 +9,7 @@ import { KeysDialog } from "./components/KeysDialog.tsx";
 import { Readiness } from "./components/Readiness.tsx";
 import { UsageDialog } from "./components/UsageDialog.tsx";
 import { SubagentPanel } from "./components/SubagentPanel.tsx";
-import { applyEvent, entriesFromMessages, note, speak } from "./lineReducer.ts";
+import { applyEvent, entriesFromMessages, errorNote, note, speak } from "./lineReducer.ts";
 import { indexPluginTools } from "./pluginTools.ts";
 import type {
   Attachment,
@@ -79,8 +79,10 @@ export function App() {
     setLines((prev) => {
       const line = prev.get(id);
       if (!line) return prev;
+      const changed = change(line);
+      if (changed === line) return prev;
       const next = new Map(prev);
-      next.set(id, change(line));
+      next.set(id, changed);
       return next;
     });
   }, []);
@@ -190,14 +192,13 @@ export function App() {
       }
     });
     const offFatal = window.operator.onFatal(({ id, message }) => {
-      patch(id, (line) => note({ ...line, lamp: "off", sending: false, loading: false }, message, "alarm"));
+      patch(id, (line) => errorNote({ ...line, lamp: "off", sending: false, loading: false }, message));
     });
-    const offExit = window.operator.onExit(({ id, code, stderr }) => {
+    const offExit = window.operator.onExit(({ id }) => {
       patch(id, (line) =>
-        note(
+        errorNote(
           { ...line, lamp: "off", sending: false, loading: false },
-          `Сессия остановлена (код ${code ?? "?"})${stderr ? `: ${stderr.slice(-400)}` : ""}`,
-          "alarm",
+          "линия оборвалась",
         ),
       );
     });
@@ -210,7 +211,19 @@ export function App() {
 
   const openSession = useCallback(
     async (cwd: string, restore?: SessionSummary) => {
-      if (order.length >= MAX_SESSIONS) return;
+      // Opening history replaces an unused blank tab instead of keeping a
+      // second idle agent (and its plugins) in memory. Busy tabs stay alive.
+      const blankId = restore ? order.find((id) => {
+        const line = lines.get(id);
+        return line && line.entries.length === 0 && line.lamp === "ready" &&
+          !line.loading && !line.sending && !line.compacting && !line.held?.length;
+      }) : undefined;
+      if (order.length >= MAX_SESSIONS && !blankId) return;
+      if (blankId) {
+        void window.operator.close(blankId);
+        setLines((prev) => { const next = new Map(prev); next.delete(blankId); return next; });
+        setOrder((prev) => prev.filter((id) => id !== blankId));
+      }
       const id = `session-${++counter.current}`;
       const fresh: LineState = {
         id,
@@ -221,7 +234,7 @@ export function App() {
         lamp: "ready",
         entries: [],
         model: null,
-        contextWindow: 262144,
+        contextWindow: 258000,
         contextUsed: 0,
         thinkingLevel: "off",
         autoCompaction: true,
@@ -266,10 +279,10 @@ export function App() {
           }));
         }
       } catch (error) {
-        patch(id, (line) => note({ ...line, loading: false }, String((error as Error).message), "alarm"));
+        patch(id, (line) => errorNote({ ...line, loading: false }, error));
       }
     },
-    [order.length, models.length, commands.length, patch],
+    [order, lines, models.length, commands.length, patch],
   );
 
   // Первая сессия — домашняя папка.
@@ -286,6 +299,15 @@ export function App() {
   }, []);
 
   const active = activeId ? lines.get(activeId) : undefined;
+  const selectTool = useCallback((run: ToolRun) => {
+    if (run.name === "subagent") {
+      setSelectedSubagentId(run.id);
+      setSubagentPanelOpen(true);
+    } else if (activeId) {
+      setSelectedTool((current) => current?.lineId === activeId && current.toolId === run.id ? null : { lineId: activeId, toolId: run.id });
+    }
+  }, [activeId]);
+  const closeTool = useCallback(() => setSelectedTool(null), []);
   const subagentRuns = useMemo(
     () => active?.entries.filter((entry): entry is ToolRun => entry.kind === "tool" && entry.name === "subagent") ?? [],
     [active?.entries],
@@ -304,12 +326,13 @@ export function App() {
         return await window.operator.send(activeId, command, payload);
       } catch (error) {
         const message = String((error as Error).message);
-        if (/nothing to compact/i.test(message)) {
+        if (/nothing to compact|already compacted/i.test(message)) {
           patch(activeId, (line) => note(line, "Сжимать пока нечего: диалог ещё короткий."));
           return null;
         }
+        if (command === "compact" && /compaction cancel(?:led|ed)|AbortError/i.test(message)) return null;
         // Ответа не будет — значит, «отправляется» снимать больше некому.
-        patch(activeId, (line) => note({ ...line, sending: false }, message, "alarm"));
+        patch(activeId, (line) => errorNote({ ...line, sending: false }, error));
         return null;
       }
     },
@@ -385,7 +408,7 @@ export function App() {
             .flatMap((item) => (item.kind === "image" ? [{ type: "image", data: item.data, mimeType: item.mimeType }] : [])),
         })
         .catch((error: Error) => {
-          patch(id, (current) => note({ ...current, sending: false }, String(error.message), "alarm"));
+          patch(id, (current) => errorNote({ ...current, sending: false }, error));
         });
     }
   }, [lines, patch]);
@@ -588,18 +611,12 @@ export function App() {
         )}
 
         <Transcript
+          key={activeId}
           pluginForTool={pluginForTool}
-          onSelectTool={(run) => {
-            if (run.name === "subagent") {
-              setSelectedSubagentId(run.id);
-              setSubagentPanelOpen(true);
-            } else if (activeId) {
-              setSelectedTool((current) => current?.lineId === activeId && current.toolId === run.id ? null : { lineId: activeId, toolId: run.id });
-            }
-          }}
+          onSelectTool={selectTool}
           selectedToolId={selectedTool?.lineId === activeId ? selectedTool.toolId : null}
           inspectionRevision={inspectionRevision}
-          onCloseTool={() => setSelectedTool(null)}
+          onCloseTool={closeTool}
           sending={active?.sending === true}
           compacting={active?.compacting === true}
           loading={active?.loading === true}

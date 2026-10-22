@@ -18,6 +18,9 @@ import { loadPlugins } from "./plugins.mjs";
 import { createBackgroundTools, createGithubTool } from "./tasks.mjs";
 import { createComputerTool, inspectEnvironment } from "./computer.mjs";
 import { IS_WINDOWS } from "./platform.mjs";
+import { createBrowserTool } from "./browser.mjs";
+import { createToolDiscovery } from "./tool-discovery.mjs";
+import { COMMAND_TOOLS, isDangerousCommand, matchRule, subjectOf } from "./command-policy.mjs";
 
 const SIGNAL = "@@desk@@";
 
@@ -32,44 +35,12 @@ const JOB_LOGS = process.env.OPERATOR_DESK_JOBS ?? "";
 /** Инструменты, меняющие файлы: их снимаем в чекпоинт и спрашиваем строже. */
 const WRITING_TOOLS = new Set(["write", "edit", "patch"]);
 
-/** Команды, которые нельзя пропускать молча даже в разрешающем режиме. */
-const DANGEROUS = [
-  /\brm\s+-[a-z]*[rf]/i,
-  /\bgit\s+push\b.*--force/i,
-  /\bgit\s+reset\s+--hard\b/i,
-  /\bdd\s+if=/i,
-  /\bmkfs\b/i,
-  /\bchmod\s+-R\s+777\b/i,
-  /\b(shutdown|reboot|halt)\b/i,
-];
-
 function readConfig() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
   } catch {
     return { rules: [] };
   }
-}
-
-/** Текст, по которому сопоставляются правила: команда для bash, путь для файловых. */
-function subjectOf(tool, input) {
-  if (tool === "bash") return String(input?.command ?? "");
-  return String(input?.path ?? input?.file_path ?? input?.pattern ?? "");
-}
-
-function matchRule(rules, tool, subject) {
-  for (const rule of rules ?? []) {
-    if (rule.tool && rule.tool !== tool) continue;
-    if (rule.pattern) {
-      try {
-        if (!new RegExp(rule.pattern, "i").test(subject)) continue;
-      } catch {
-        continue;
-      }
-    }
-    return rule.action;
-  }
-  return null;
 }
 
 export default function deskBridge(operator) {
@@ -127,30 +98,31 @@ export default function deskBridge(operator) {
     const subject = subjectOf(tool, event.input);
 
     const explicit = matchRule(config.rules, tool, subject);
-    const dangerous = tool === "bash" && DANGEROUS.some((pattern) => pattern.test(subject));
+    const dangerous = COMMAND_TOOLS.has(tool) && isDangerousCommand(subject);
 
-    if (explicit === "deny") {
+    if (explicit?.action === "deny") {
       send(ctx, { kind: "denied", tool, subject });
       return { block: true, reason: "Вызов запрещён правилами разрешений." };
     }
 
     // Спрашиваем только то, что можно не восстановить: остальное агент делает сам.
-    const needsAsk = explicit === "ask" || (explicit !== "allow" && dangerous);
+    // Old prefix rules must not silently authorize new destructive arguments.
+    const exactlyAllowed = explicit?.action === "allow" && explicit.tool === tool && explicit.subject === subject;
+    const needsAsk = explicit?.action === "ask" || (!exactlyAllowed && dangerous);
 
     if (!needsAsk) {
       checkpoint(ctx, tool, event.input, event.toolCallId);
       return;
     }
 
-    // Без диалогового канала спрашивать некого — пропускаем, но помечаем.
-    if (!ctx?.hasUI) {
-      send(ctx, { kind: "auto-allowed", tool, subject });
-      checkpoint(ctx, tool, event.input, event.toolCallId);
-      return;
+    // Without a dialog channel we cannot obtain the required authorization.
+    if (!ctx?.hasUI || typeof ctx.ui?.select !== "function") {
+      send(ctx, { kind: "denied", tool, subject });
+      return { block: true, reason: "Действие требует подтверждения пользователя, но канал подтверждения недоступен." };
     }
 
     const choice = await ctx.ui.select(
-      `Опасная команда: ${subject.slice(0, 120)}`,
+      `${dangerous ? "Опасная команда" : "Подтверждение действия"} (${tool}): ${subject}`,
       ["Разрешить", "Разрешить всегда", "Отклонить"],
       { timeout: 300_000 },
     );
@@ -205,6 +177,10 @@ export default function deskBridge(operator) {
     }
   }
   operator.registerTool(createGithubTool());
+  operator.registerTool(createBrowserTool(
+    () => readConfig().computerUse === true,
+    payload => send(lastCtx, payload),
+  ));
 
   // Управление экраном включается пользователем и по умолчанию выключено.
   operator.registerTool(
@@ -247,7 +223,9 @@ export default function deskBridge(operator) {
   // Инструменты плагинов появляются у агента рядом со встроенными.
   let pluginsReady = null;
   if (PLUGINS_BUILTIN || PLUGINS_USER) {
+    const discovery = createToolDiscovery(operator);
     pluginsReady = loadPlugins(operator, {
+      discovery,
       builtinDir: PLUGINS_BUILTIN,
       userDir: PLUGINS_USER,
       registryFile: PLUGINS_REGISTRY,
@@ -256,6 +234,15 @@ export default function deskBridge(operator) {
     }).catch((error) => ({
       plugins: [{ id: "plugins", name: "Плагины", status: "error", tools: 0, error: String(error) }],
     }));
+    let deferredCatalog = "";
+    operator.on("input", async () => {
+      await pluginsReady;
+      deferredCatalog = discovery.beforePrompt();
+    });
+    operator.on("before_agent_start", (event) => {
+      return { systemPrompt: event.systemPrompt + (deferredCatalog
+        ? `\n\n[Инструменты плагинов по запросу]\nДля этих сервисов сначала вызови tool_search с названием сервиса и действием. Обычно загружай один инструмент; увеличивай limit только если нужны несколько вместе. Найденные инструменты станут доступны в следующем ходе.\n${deferredCatalog}` : "") };
+    });
   }
 
   // Ядро читает auth.json один раз при старте, а ключ десктоп дописывает в файл,

@@ -3,6 +3,12 @@
  * читался как одно семейство; неизвестные инструменты получают точки.
  */
 const paths: Record<string, React.ReactNode> = {
+  background_run: (
+    <>
+      <path d="M4.3 12.4h7.1a2.9 2.9 0 0 0 .5-5.8 4 4 0 0 0-7.6-1 3.4 3.4 0 0 0 0 6.8Z" />
+      <path d="m7 7 2.7 1.8L7 10.6Z" fill="currentColor" stroke="none" />
+    </>
+  ),
   bash: (
     <>
       <path d="M3.2 4.6l3 3.4-3 3.4" />

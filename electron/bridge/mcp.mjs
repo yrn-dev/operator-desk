@@ -268,10 +268,11 @@ export async function connectMcpServer(operator, name, config) {
   }
 
   const toolNames = [];
+  const definitions = [];
   for (const tool of tools) {
     const registeredName = `${name}__${tool.name}`.replace(/[^a-zA-Z0-9_]/g, "_");
     toolNames.push(registeredName);
-    operator.registerTool({
+    const definition = {
       name: registeredName,
       label: `${name}: ${tool.name}`,
       description: tool.description ?? `Инструмент ${tool.name} сервера ${name}`,
@@ -282,8 +283,17 @@ export async function connectMcpServer(operator, name, config) {
         try {
           await ensure();
           const result = await server.call(tool.name, params);
+          let text = resultToContent(result);
+          // Retain full output on disk, but avoid replaying megabytes on every turn.
+          if (text.length > 16000 && config.cacheFile) {
+            const directory = path.join(path.dirname(config.cacheFile), "results");
+            fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+            const file = path.join(directory, `${crypto.randomUUID()}.txt`);
+            fs.writeFileSync(file, text, { mode: 0o600 });
+            text = `${text.slice(0, 12000)}\n\n[Output shortened; full result (${text.length} characters): ${file}. Read needed sections with read/bash.]\n\n${text.slice(-2000)}`;
+          }
           return {
-            content: [{ type: "text", text: resultToContent(result) }],
+            content: [{ type: "text", text }],
             isError: Boolean(result?.isError),
             details: { server: name, tool: tool.name },
           };
@@ -298,7 +308,14 @@ export async function connectMcpServer(operator, name, config) {
           sleepLater();
         }
       },
-    });
+    };
+    definitions.push(definition);
+    operator.registerTool(definition);
+  }
+  // Many small servers can cost more context than one large catalogue.
+  // Defer every MCP schema; tool_search loads only the requested capability.
+  if (config.discovery) {
+    config.discovery.register(name, definitions);
   }
 
   return {

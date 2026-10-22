@@ -53,12 +53,12 @@ export function PermissionDialog({
             <path d="M8 2.6l5.6 9.8H2.4L8 2.6z" />
             <path d="M8 6.6v3M8 11.2v.1" />
           </svg>
-          <span style={{ fontSize: 15, color: "var(--text)" }}>{ask.title}</span>
+          <span style={{ fontSize: 15, color: "var(--text)", whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: "40vh", overflowY: "auto" }}>{ask.title}</span>
         </div>
 
         <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 18 }}>
           Агент просит выполнить действие. Решение применится к этому вызову;
-          «всегда» запомнит правило для похожих.
+          «всегда» разрешит только точно такое же действие в этом инструменте.
         </div>
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>

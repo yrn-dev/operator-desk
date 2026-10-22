@@ -5,6 +5,7 @@ import os from "node:os";
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { OperatorLine, pathWithBin } from "./rpc.ts";
+import { createUiEventStream } from "./ui-events.ts";
 import { bundledOperator, locateBinary, locateOpr, type OperatorLauncher } from "./locate-opr.ts";
 import { listSessions } from "./sessions.ts";
 import { linkPreview } from "./link-preview.ts";
@@ -18,10 +19,15 @@ import {
 import { IS_LINUX, IS_MAC, spawnPortable } from "./portable.ts";
 import { configureBrandIcons, resolvePluginIcon } from "./plugin-icons.ts";
 import { checkLatestVersion, recordUsage, setUsagePreference, usagePreference } from "./operator-service.ts";
+import { AgentBrowser } from "./browser.ts";
+import { rememberedRule } from "./bridge/command-policy.mjs";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(dirname, "..");
 const DEV_SERVER = process.env.VITE_DEV_SERVER_URL;
+// Installed and portable copies share the same profile. Do not let two new
+// instances write session metadata and plugin settings concurrently.
+if (!app.requestSingleInstanceLock()) app.exit(0);
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 
 // ES-модули не грузятся по file:// из-за CORS — отдаём сборку через свой протокол.
@@ -30,6 +36,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const lines = new Map<string, OperatorLine>();
+const browsers = new Map<string, AgentBrowser>();
 
 /** Приложение закрывается: отказы линий на этом этапе — не ошибка. */
 let quitting = false;
@@ -71,42 +78,29 @@ function operatorLauncher(): OperatorLauncher | null {
 function runtimeSource(folder: string): string {
   const packed = path.join(dirname, folder);
   const unpacked = packed.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
-  return unpacked !== packed && fs.existsSync(unpacked) ? unpacked : packed;
-}
-
-/** Копирует папку из сборки в настройки и сообщает, если не вышло. */
-function copyRuntime(folder: string, target: string): void {
-  const source = runtimeSource(folder);
-  try {
-    fs.cpSync(source, target, { recursive: true, force: true });
-  } catch (error) {
-    // Копия от прошлого запуска может подойти, но молчать об этом нельзя.
-    trace(`[copy-failed] ${source} → ${target}: ${(error as Error).message}`);
-    console.error(`не удалось скопировать ${folder}:`, error);
-  }
+  const source = unpacked !== packed ? unpacked : packed;
+  if (!fs.existsSync(source)) throw new Error(`Файлы Operator отсутствуют: ${folder}. Переустановите приложение.`);
+  return source;
 }
 
 function bridgePath(): string {
-  const target = path.join(app.getPath("userData"), "bridge");
-  // Мост состоит из нескольких модулей — копируем папку целиком.
-  copyRuntime("bridge", target);
-  return path.join(target, "desk-bridge.mjs");
+  // Load only the bridge shipped with this executable. Old shared copies in
+  // userData must never mix with a new core after an upgrade or portable run.
+  return path.join(runtimeSource("bridge"), "desk-bridge.mjs");
 }
 
 /** Дополнение к системному промпту: рассказывает агенту про эту среду. */
 function promptPath(): string {
-  return path.join(app.getPath("userData"), "bridge", "desk-prompt.md");
+  return path.join(runtimeSource("bridge"), "desk-prompt.md");
 }
 
 function policyPath(): string {
   return path.join(app.getPath("userData"), "policy.json");
 }
 
-/** Плагины, которые едут с приложением: копируем рядом с настройками. */
+/** Built-in plugin code comes from this release; settings remain in userData. */
 function builtinPluginsDir(): string {
-  const target = path.join(app.getPath("userData"), "plugins-builtin");
-  copyRuntime("plugins", target);
-  return target;
+  return runtimeSource("plugins");
 }
 
 /** Плагины, установленные пользователем. */
@@ -159,6 +153,12 @@ function writePolicy(policy: Record<string, unknown>): void {
   fs.writeFileSync(policyPath(), JSON.stringify(policy, null, 2), "utf8");
 }
 let win: BrowserWindow | null = null;
+app.on("second-instance", () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+});
 
 function installMenu(): void {
   // На macOS меню всегда на экране, и без appMenu не работали бы ни Cmd+Q,
@@ -222,6 +222,11 @@ function createWindow(): void {
   }
 
   win.once("ready-to-show", () => win?.show());
+  win.on("closed", () => {
+    for (const browser of browsers.values()) browser.close();
+    browsers.clear();
+    win = null;
+  });
   win.webContents.on("console-message", (event: any) => {
     trace(`[console:${event.level}] ${event.message} (${event.sourceId}:${event.lineNumber})`);
   });
@@ -297,6 +302,13 @@ ipcMain.handle("line:open", (_e, args: { id: string; cwd: string; provider?: str
     return { ok: false };
   }
 
+  const browserDirectory = path.join(app.getPath("userData"), "browser-requests", crypto.randomUUID());
+  const browser = new AgentBrowser(() => {
+    try { return JSON.parse(fs.readFileSync(policyPath(), "utf8")).computerUse === true; }
+    catch { return false; }
+  });
+  browsers.get(args.id)?.close();
+  browsers.set(args.id, browser);
   const line = new OperatorLine(args.id, {
     cwd: args.cwd,
     provider: args.provider,
@@ -314,12 +326,14 @@ ipcMain.handle("line:open", (_e, args: { id: string; cwd: string; provider?: str
       OPERATOR_DESK_PLUGINS_REGISTRY: pluginsRegistryPath(),
       OPERATOR_DESK_PLUGINS_DATA: pluginsDataDir(),
       OPERATOR_DESK_JOBS: path.join(app.getPath("userData"), "jobs"),
+      OPERATOR_DESK_BROWSER: browserDirectory,
       // Пустое значение означает: снимок делает сам мост внешней программой.
       OPERATOR_DESK_SHOTS: canCaptureInApp() ? path.join(app.getPath("userData"), "shots") : "",
       OPERATOR_DESK_BIN: launcher.bundled ? "" : launcher.command,
     },
   });
 
+  const uiEvents = createUiEventStream((event) => forward("line:event", { id: args.id, event }));
   line.on("event", (event) => {
     if (event.type === "extension_ui_request") {
       const message = typeof event.message === "string" ? event.message : "";
@@ -327,6 +341,20 @@ ipcMain.handle("line:open", (_e, args: { id: string; cwd: string; provider?: str
         // Служебный канал моста: события разрешений, чекпоинтов и снимков.
         try {
           const signal = JSON.parse(message.slice(8));
+          if (signal.kind === "browser-request") {
+            if (!/^[a-f0-9-]{36}$/.test(signal.id) || !Number.isFinite(signal.deadline) || signal.deadline < Date.now()) return;
+            void (async () => {
+              let result;
+              try { result = await browser.execute(signal.input, () => Date.now() < signal.deadline && !fs.existsSync(path.join(browserDirectory, `${signal.id}.cancel`))); }
+              catch (error) { result = { error: String(error) }; }
+              if (Date.now() > signal.deadline || lines.get(args.id) !== line) return;
+              fs.mkdirSync(browserDirectory, { recursive: true });
+              const target = path.join(browserDirectory, `${signal.id}.json`);
+              fs.writeFileSync(`${target}.tmp`, JSON.stringify(result));
+              fs.renameSync(`${target}.tmp`, target);
+            })().catch(error => trace(`[browser] ${String(error)}`));
+            return;
+          }
           if (signal.kind === "capture") {
             void serveCapture(String(signal.id));
             return;
@@ -340,13 +368,18 @@ ipcMain.handle("line:open", (_e, args: { id: string; cwd: string; provider?: str
       forward("bridge:ask", { id: args.id, request: event });
       return;
     }
-    forward("line:event", { id: args.id, event });
+    uiEvents.push(event);
   });
   line.on("fatal", (message: string) => {
     trace(`[line:fatal] ${args.id}: ${message}`);
     forward("line:fatal", { id: args.id, message });
   });
   line.on("exit", (code: number | null, stderr: string) => {
+    uiEvents.flush();
+    uiEvents.dispose();
+    browser.close();
+    if (browsers.get(args.id) === browser) browsers.delete(args.id);
+    fs.rmSync(browserDirectory, { recursive: true, force: true });
     trace(`[line:exit] ${args.id} код=${code} stderr=${stderr.slice(-600)}`);
     // Мёртвая линия не должна оставаться в карте: иначе следующая отправка
     // уйдёт в уничтоженный stdin вместо честного «линия не подключена».
@@ -379,6 +412,8 @@ ipcMain.handle(
 );
 
 ipcMain.handle("line:close", (_e, args: { id: string }) => {
+  browsers.get(args.id)?.close();
+  browsers.delete(args.id);
   lines.get(args.id)?.stop();
   lines.delete(args.id);
   return { ok: true };
@@ -841,10 +876,7 @@ ipcMain.handle("policy:set", (_e, policy: Record<string, unknown>) => {
 ipcMain.handle("policy:remember", (_e, args: { tool: string; subject: string }) => {
   const policy = readPolicy();
   const rules = Array.isArray(policy.rules) ? [...(policy.rules as any[])] : [];
-  // Для bash запоминаем первое слово команды, для остальных — весь инструмент.
-  const head = args.subject.trim().split(/\s+/)[0];
-  const pattern = args.tool === "bash" && head ? `^${head.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b` : undefined;
-  rules.unshift({ tool: args.tool, pattern, action: "allow" });
+  rules.unshift(rememberedRule(args.tool, args.subject));
   writePolicy({ ...policy, rules });
   return readPolicy();
 });
@@ -1131,6 +1163,8 @@ ipcMain.handle("app:initialPrompt", () => process.env.OPERATOR_DESK_PROMPT ?? nu
 
 function stopAllLines(): void {
   quitting = true;
+  for (const browser of browsers.values()) browser.close();
+  browsers.clear();
   for (const line of lines.values()) line.stop();
   lines.clear();
 }

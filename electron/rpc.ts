@@ -34,7 +34,16 @@ export type LineOptions = {
   appendPrompt?: string;
   /** Дополнительные переменные окружения для процесса. */
   env?: Record<string, string>;
+  /** Override the bounded wait for RPC replies (also used by local fixtures). */
+  responseTimeoutMs?: number;
 };
+
+const LONG_COMMANDS = new Set(["prompt", "compact", "bash", "switch_session", "new_session", "fork", "navigate_tree", "reload"]);
+
+/** Slow model/session operations get ten minutes; control requests get thirty seconds. */
+export function rpcResponseTimeout(type: string): number {
+  return LONG_COMMANDS.has(type) ? 600_000 : 30_000;
+}
 
 /**
  * Одна «линия» — отдельный процесс operator в режиме RPC.
@@ -76,8 +85,9 @@ export class OperatorLine extends EventEmitter {
 
     // Когда opr умирает во время записи, поток отдаёт EPIPE событием error.
     // Без слушателя это необработанное исключение и падение всего приложения.
-    this.proc.stdin.on("error", () => {
+    this.proc.stdin.on("error", (error) => {
       this.alive = false;
+      this.rejectPending(error);
     });
 
     this.proc.stdout.setEncoding("utf8");
@@ -91,16 +101,21 @@ export class OperatorLine extends EventEmitter {
 
     this.proc.on("error", (err) => {
       this.alive = false;
+      this.rejectPending(err);
       this.emit("fatal", `не удалось запустить «${bin}»: ${err.message}`);
     });
 
     this.proc.on("exit", (code) => {
       this.alive = false;
       const reason = new Error(`линия оборвалась (код ${code ?? "?"})`);
-      for (const [, p] of this.pending) p.reject(reason);
-      this.pending.clear();
+      this.rejectPending(reason);
       this.emit("exit", code, this.stderrTail.join(""));
     });
+  }
+
+  private rejectPending(reason: Error): void {
+    for (const p of this.pending.values()) p.reject(reason);
+    this.pending.clear();
   }
 
   private consume(chunk: string): void {
@@ -150,18 +165,31 @@ export class OperatorLine extends EventEmitter {
     const id = `c${++this.seq}`;
     const command = JSON.stringify({ ...payload, id, type }) + "\n";
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as Pending["resolve"], reject });
+      const timeout = this.options.responseTimeoutMs ?? rpcResponseTimeout(type);
+      const timer = setTimeout(() => {
+        this.pending.get(id)?.reject(new Error(
+          `Оператор не ответил на «${type}» за ${timeout / 1000} с. Действие могло выполниться; проверьте состояние перед повтором.`,
+        ));
+      }, timeout);
+      timer.unref();
+      const cleanup = () => {
+        clearTimeout(timer);
+        this.pending.delete(id);
+      };
+      const fail = (error: Error) => { cleanup(); reject(error); };
+      this.pending.set(id, {
+        resolve: (value) => { cleanup(); resolve(value as T); },
+        reject: fail,
+      });
       try {
         this.proc!.stdin.write(command, (err) => {
           if (err) {
-            this.pending.delete(id);
-            reject(err);
+            fail(err);
           }
         });
       } catch (err) {
         // Запись в уничтоженный поток бросает синхронно, минуя обратный вызов.
-        this.pending.delete(id);
-        reject(err as Error);
+        fail(err as Error);
       }
     });
   }
@@ -182,8 +210,7 @@ export class OperatorLine extends EventEmitter {
   stop(): void {
     // Ждущие ответа промисы надо отклонить, иначе вызывающий висит вечно.
     const reason = new Error("линия закрыта");
-    for (const [, p] of this.pending) p.reject(reason);
-    this.pending.clear();
+    this.rejectPending(reason);
 
     this.alive = false;
     const proc = this.proc;
