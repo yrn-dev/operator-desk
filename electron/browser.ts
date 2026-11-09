@@ -1,8 +1,10 @@
 import { BrowserWindow } from "electron";
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { browserPage } from "./browser-page.ts";
 
-export type BrowserRequest = { action: string; tab?: string; url?: string; snapshot?: string; ref?: number; text?: string; value?: string; direction?: string };
+export type BrowserRequest = { action: string; tab?: string; url?: string; snapshot?: string; ref?: number; text?: string; value?: string; direction?: string; files?: string[]; timeoutMs?: number };
 
 export function browserURL(value: unknown): string {
   if (typeof value !== "string" || value.length > 8192) throw new Error("A valid HTTP(S) URL is required.");
@@ -25,7 +27,7 @@ export class AgentBrowser {
       if (this.closed) throw new Error("Browser session is closed.");
       if (!active()) throw new Error("Browser request expired or was cancelled.");
       if (!this.enabled()) throw new Error("Автопилот выключен. Включите его рядом с полем ввода.");
-      return this.run(input);
+      return this.run(input, active);
     });
     this.queue = result.catch(() => {});
     return result;
@@ -46,7 +48,9 @@ export class AgentBrowser {
     // Generate observation IDs in Node, without exposing Node to the page.
     const snapshotId = crypto.randomUUID();
     // JSON encoding prevents field values from becoming executable source code.
-    const result = await win.webContents.executeJavaScriptInIsolatedWorld(1001, [{ code: `(() => { try { return (${browserPage.toString()})(${JSON.stringify(input)}, ${JSON.stringify(snapshotId)}); } catch (error) { return { __operatorError: String(error.message || error) }; } })()` }], ["click", "fill", "select"].includes(input.action));
+    const { files, ...rest } = input;
+    const pageInput = { ...rest, ...(input.action === "upload" ? { fileCount: files?.length } : {}) };
+    const result = await win.webContents.executeJavaScriptInIsolatedWorld(1001, [{ code: `(() => { try { return (${browserPage.toString()})(${JSON.stringify(pageInput)}, ${JSON.stringify(snapshotId)}); } catch (error) { return { __operatorError: String(error.message || error) }; } })()` }], ["click", "fill", "select", "upload"].includes(input.action));
     if (result?.__operatorError) throw new Error(result.__operatorError);
     return result;
   }
@@ -82,7 +86,35 @@ export class AgentBrowser {
     });
   }
 
-  private async run(input: BrowserRequest): Promise<unknown> {
+  private async upload(win: BrowserWindow, input: BrowserRequest, active: () => boolean) {
+    if (!Array.isArray(input.files) || input.files.length < 1 || input.files.length > 20) throw new Error("Upload requires 1–20 explicit absolute file paths.");
+    const files = await Promise.all(input.files.map(async file => {
+      if (typeof file !== "string" || !path.isAbsolute(file)) throw new Error("Upload requires absolute file paths.");
+      const canonical = await fs.realpath(file);
+      if (!(await fs.stat(canonical)).isFile()) throw new Error("Upload path must be a regular file.");
+      return canonical;
+    }));
+    if (!active() || !this.enabled()) throw new Error("Upload cancelled or Autopilot disabled.");
+    const target = await this.page(win, input);
+    if (files.length > 1 && !target.multiple) throw new Error("This input accepts one file only.");
+    const debug = win.webContents.debugger;
+    const attached = debug.isAttached();
+    if (!attached) debug.attach("1.3");
+    let nodeId: number | undefined;
+    try {
+      const { root } = await debug.sendCommand("DOM.getDocument");
+      const node = await debug.sendCommand("DOM.querySelector", { nodeId: root.nodeId, selector: `[data-operator-upload="${target.uploadTarget}"]` });
+      nodeId = node.nodeId;
+      if (!nodeId) throw new Error("File input changed before upload. Refresh the snapshot.");
+      if (!active() || !this.enabled()) throw new Error("Upload cancelled or Autopilot disabled.");
+      await debug.sendCommand("DOM.setFileInputFiles", { nodeId, files });
+    } finally {
+      if (nodeId) await debug.sendCommand("DOM.removeAttribute", { nodeId, name: "data-operator-upload" }).catch(() => {});
+      if (!attached && debug.isAttached()) debug.detach();
+    }
+  }
+
+  private async run(input: BrowserRequest, active: () => boolean): Promise<unknown> {
     if (input.action === "tabs") return { tabs: this.list() };
     if (input.action === "open") {
       const url = browserURL(input.url);
@@ -116,15 +148,31 @@ export class AgentBrowser {
     if (!win || win.isDestroyed()) throw new Error("Unknown tab. Use tabs or open first.");
     const tab = input.tab!;
     if (input.action === "close") { win.destroy(); return { closed: tab, tabs: this.list() }; }
+    if (input.action === "wait") {
+      if (typeof input.text !== "string" || !input.text.trim()) throw new Error("wait requires the visible text to wait for.");
+      if (input.timeoutMs !== undefined && (!Number.isFinite(input.timeoutMs) || input.timeoutMs < 100 || input.timeoutMs > 10000)) throw new Error("wait timeoutMs must be between 100 and 10000.");
+      const deadline = Date.now() + (input.timeoutMs ?? 5000);
+      while (true) {
+        if (!active() || !this.enabled()) throw new Error("Browser wait cancelled or Autopilot disabled.");
+        const page = await this.observe(tab, win, 0);
+        if ("error" in page) return page;
+        if ("text" in page && typeof page.text === "string" && page.text.includes(input.text)) return { ...page, matched: true };
+        if (Date.now() >= deadline) return { ...page, matched: false, message: "Text has not appeared within the wait interval. Inspect this state before the next action." };
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
     if (input.action === "navigate") {
       const url = browserURL(input.url);
       await this.navigation(win, () => { void win.loadURL(url).catch(() => {}); });
     } else if (input.action === "back") {
       if (win.webContents.navigationHistory.canGoBack()) await this.navigation(win, () => win.webContents.navigationHistory.goBack());
     } else if (input.action !== "snapshot") {
-      if (!["click", "fill", "select", "scroll"].includes(input.action)) throw new Error("Unsupported browser action.");
+      if (!["click", "fill", "select", "scroll", "upload"].includes(input.action)) throw new Error("Unsupported browser action.");
       if (!this.enabled()) throw new Error("Автопилот выключен.");
-      try { await this.page(win, input); }
+      try {
+        if (input.action === "upload") await this.upload(win, input, active);
+        else await this.page(win, input);
+      }
       catch (error) {
         // Never repeat an action after a navigation/context error: it may have succeeded.
         return { error: String(error), actionOutcome: "Check the refreshed page before retrying.", ...await this.observe(tab, win) };

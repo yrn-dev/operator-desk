@@ -1,0 +1,116 @@
+{
+  "package": "pzero-operator",
+  "version": "1.2.3",
+  "files": [
+    {
+      "path": "core/agent-session-services.js",
+      "baseSha256": "11ffd0adf749d272c59b5e1bd1f30d4cd78a6b6885e1421655033e8e3f82b837",
+      "sha256": "7841810d7ffe87074b5910e3f0eb85b6a41913249c7cafae2ece133b55b7a285"
+    },
+    {
+      "path": "core/agent-session.js",
+      "baseSha256": "e0ee3a1e571cf9f5a3e11b8672987a63b17b70dd26812fbcffe41c63d4f77dee",
+      "sha256": "2d430fdc10553da03860b8746752e51a7f4673a7f6035f60e1bc54ea001c3fbe"
+    },
+    {
+      "path": "core/compaction/compaction.d.ts",
+      "baseSha256": "d15a68271b67ac3dc4cd32a576dfa5ca4d37514be7012b2b00aa8aad9ed73fee",
+      "sha256": "03bff790a2efe9bc3b0cf28a0503bd20e581c4acdc9a839652ceb23e468c9e49"
+    },
+    {
+      "path": "core/compaction/compaction.js",
+      "baseSha256": "5d71fd76be9993f884ec222f29834a4054e37ede14d9028804be093df07c3df3",
+      "sha256": "1a0875a2ce33b80ba2226f6e876577164dda8e284319d6b8f46b711161349a84"
+    },
+    {
+      "path": "core/compaction/recovery.js",
+      "baseSha256": null,
+      "sha256": "71a6ec4bd811d07c238b48e2f8bce79ae1bc652c7eff2355c94ed2f8e95d8c20"
+    },
+    {
+      "path": "core/defaults.d.ts",
+      "baseSha256": "4c9f643959e65ffc2373b937b83f5fe1c32448663ae174e47c8b1928c2061ccf",
+      "sha256": "ed6eb5a700ef6448909e46b4df476a16caddcfd5c2f0357f32f96ae40cbd6223"
+    },
+    {
+      "path": "core/defaults.js",
+      "baseSha256": "de3a2ec307c2ab9ad63922e9a2c8009a39013c6387c06746d2eec79550faf48a",
+      "sha256": "04424659f9fd2cb40a3bdef04e3fac2f27efd0b47bd1bb12ba87cde45c007108"
+    },
+    {
+      "path": "core/model-registry.d.ts",
+      "baseSha256": "d61f6dd5d32313a0f8f0c9c54918b207584378805d16eef13e36ed147970a088",
+      "sha256": "9996c4cf33d357441b56fcf2c59c44988be3243211b518767f798b8411b82b39"
+    },
+    {
+      "path": "core/model-registry.js",
+      "baseSha256": "285d9f4bd10a8248aba1b9dd2d86394d2ce6dad9e8051354e7a91ec30e5bf360",
+      "sha256": "98debf0e98a282620a9fd48917bbae78e01cd2b008ea0adaec2f8b4aa6dac7cd"
+    },
+    {
+      "path": "core/ollama-discovery.js",
+      "baseSha256": null,
+      "sha256": "40f1ebf02ec67ddab2267291e6db619b9498650f5026e5f133110031d7745c62"
+    },
+    {
+      "path": "core/provider-options.js",
+      "baseSha256": null,
+      "sha256": "7e085fd8ab24eb63746322b69b2dea69396b8500c70b43b06b483a7648014156"
+    },
+    {
+      "path": "core/resource-loader.d.ts",
+      "baseSha256": "9e03394c467aae56ae69b7e4af8df5c8cd765778ae5e28a8aed40101577fd4fc",
+      "sha256": "ba8c5b4855ca04b1a306a3759709c6ba5faffb9ab7c76ea6531db323c4324144"
+    },
+    {
+      "path": "core/resource-loader.js",
+      "baseSha256": "0b2530efa1acaadf2fae02d9a3051bff5db5f8ad78e6fb3c7f2ea4289e75a99e",
+      "sha256": "8f5546043b79e5a72c7567d923763ee8ffb559a1355cff92ee618dbcc43dddd1"
+    },
+    {
+      "path": "core/runtime-context.js",
+      "baseSha256": null,
+      "sha256": "75a8ad5c22b07363ad23a2c46c3f74fbcad378e1fe32ce78861df9b3c6deacab"
+    },
+    {
+      "path": "core/sdk.js",
+      "baseSha256": "a2f26bda5e85a4867ce1574866832d394f8079c0d77cdaa4e21ba41c473f1c44",
+      "sha256": "81c9eff34cb3c4acb48c153b3c0de42f08050d5ed983c530e32f9c7f46576cec"
+    },
+    {
+      "path": "core/system-prompt.d.ts",
+      "baseSha256": "2d99ca582e7d9eed36e848b8e86a6d60572263032969372e39653009bf1f6e20",
+      "sha256": "76cc8ca6e38c00d142b2ecffdc1a271aaba77b730c02557a7ff55038c8205c09"
+    },
+    {
+      "path": "core/system-prompt.js",
+      "baseSha256": "48b96422a36c4311157a231d89aa7cf56db4c237bba5936e969843b251ccd086",
+      "sha256": "a3a5a6d32619691686ab2b498971a8a59419279b9e9ddd54c950624c6fffa22d"
+    },
+    {
+      "path": "core/tools/memory.js",
+      "baseSha256": "01fbbd111247d18094539a535aebe54344a28a5549cb15a845782082e8e3a047",
+      "sha256": "317fc9517667e0269bc75839ea6342df9b1eef45bad8e4b7ad15b557f101a6cc"
+    },
+    {
+      "path": "core/tools/node-test-command.js",
+      "baseSha256": null,
+      "sha256": "048a174d1e3fa6981e5fa8e8af705dd75610b7b0552f0f9bed8bd397a58fb0c5"
+    },
+    {
+      "path": "core/tools/read-full.js",
+      "baseSha256": "3e95cea4a0cb42a0d7b500faa80cf45d11fc0543b8d5de48499b974f4f2b8d90",
+      "sha256": "ba3522482228a0afc618fe1b19532b464312e6df9b1ee8b6ffeaec3ee910578f"
+    },
+    {
+      "path": "core/tools/test-run.js",
+      "baseSha256": "0a3c3261db94190d77510bd9f7a74a11fdbca1b6b33d52bd73d31a90aa15e32b",
+      "sha256": "45902b86a173114a4b98321b888372eb6d5dad3f4e84d6a421d6be972c42f01a"
+    },
+    {
+      "path": "modes/rpc/rpc-mode.js",
+      "baseSha256": "484ef8ea85e6e797c3ef96c764abf4057a7c49a1c4a71c01f2bbd15a8ac91b04",
+      "sha256": "4839d89ae2c368dc55ce159d229cc76c6be1555086c4c641c8510377dc5f2030"
+    }
+  ]
+}

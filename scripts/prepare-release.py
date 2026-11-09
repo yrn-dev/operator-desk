@@ -7,11 +7,13 @@ import re
 
 project = Path(__file__).resolve().parents[1]
 version = json.loads((project / 'package.json').read_text())['version']
-previous = '0.3.4'
 release = project / 'release' / version
 stage = project / 'release' / f'deploy-{version}'
 site = project.parent / 'projects/operator-site'
 stage.mkdir(exist_ok=True)
+before_index = (stage / 'before/index.html').read_text()
+previous = re.search(r'Operator-(\d+\.\d+\.\d+)-win-x64\.exe', before_index).group(1)
+assert previous != version, 'The public site already points at this release'
 
 def digest(file):
     h = hashlib.sha256()
@@ -23,7 +25,7 @@ def digest(file):
 names = [f'Operator-{version}-linux-amd64.deb', f'Operator-{version}-linux-x64.pacman',
          f'Operator-{version}-linux-x86_64.AppImage', f'Operator-{version}-win-x64.exe',
          f'Operator-{version}-win-x64-portable.exe', f'Operator-{version}-win-x64.exe.blockmap',
-         'latest.yml', 'latest-linux.yml']
+         'latest.yml', 'latest-linux.yml', 'operator-updates.json']
 artifacts = []
 for name in names:
     source = release / name
@@ -39,7 +41,7 @@ notes_name = f'CHANGELOG-{version}.md'
 artifacts.append({'file': notes_name, 'bytes': (stage / notes_name).stat().st_size,
                   'sha256': digest(stage / notes_name)})
 
-index = (stage / 'before/index.html').read_text().replace(previous, version)
+index = before_index.replace(previous, version)
 app_js = (stage / 'before/app.js').read_text().replace(previous, version)
 index = re.sub(r'\./app\.js\?v=[^"\s]+', f'./app.js?v=release-{version}', index)
 update_ru = ('Обновление Linux и Windows: закройте Operator. В Windows запустите установщик и нажмите «Обновить»; '
@@ -48,13 +50,13 @@ update_en = ('Updating Linux and Windows: close Operator. On Windows, run the in
              'on Linux, upgrade the existing package or replace the AppImage file. Conversations, keys and settings are preserved.')
 update_kz = ('Linux пен Windows жаңарту: Operator-ды жабыңыз. Windows-та орнатқышты іске қосып, қосымшаны жаңартыңыз; '
              'Linux-та қолданыстағы пакетті жаңартыңыз немесе AppImage файлын ауыстырыңыз. Диалогтар, кілттер және баптаулар сақталады.')
-index = index.replace('            <p class="os-picker-label"',
+index = index if 'data-i18n="install.update"' in index else index.replace('            <p class="os-picker-label"',
     f'            <p class="fineprint" data-i18n="install.update">{update_ru}</p>\n'
     '            <p class="os-picker-label"', 1)
-index = index.replace('            <p class="fineprint download-checksums">',
+index = index if 'data-i18n="install.releaseNotes"' in index else index.replace('            <p class="fineprint download-checksums">',
     f'            <p class="fineprint"><a href="./download/{notes_name}" data-i18n="install.releaseNotes">Что нового в {version}</a></p>\n'
     '            <p class="fineprint download-checksums">', 1)
-for description, translation in [('Linux and Windows version', update_en), ('Linux пен Windows үшін', update_kz)]:
+for description, translation in ([] if '"install.update"' in app_js else [('Linux and Windows version', update_en), ('Linux пен Windows үшін', update_kz)]):
     lines = app_js.splitlines(keepends=True)
     for i, line in enumerate(lines):
         if '"install.deskt"' in line and description in line:
@@ -81,7 +83,8 @@ pages = {'index.html': index, 'app.js': app_js, 'SHA256SUMS.txt': checksums,
 for name, content in pages.items():
     (stage / name).write_text(content)
 manifest = {'version': version, 'previous': previous,
-            'original': {name: digest(stage / 'before' / name) for name in ['index.html', 'app.js', 'SHA256SUMS.txt']},
+            'original': {name: digest(stage / 'before' / name) for name in ['index.html', 'app.js', 'SHA256SUMS.txt']}
+                        | {'operator-updates.json': None},
             'artifacts': artifacts, 'pages': {name: digest(stage / name) for name in pages}}
 (stage / 'deploy-input.json').write_text(json.dumps(manifest, indent=2) + '\n')
 for name in ['index.html', 'app.js']:

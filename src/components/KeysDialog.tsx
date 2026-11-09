@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { KeyEntry, ModelInfo } from "../types.ts";
+import { ProviderLogo, hasProviderLogo } from "./ProviderLogo.tsx";
 
 /** Понятное имя провайдера и подсказка, где взять ключ. */
 const PROVIDERS: Record<string, { label: string; hint: string }> = {
@@ -101,9 +102,7 @@ export function KeysDialog({ models, onClose }: { models: ModelInfo[]; onClose: 
                     background: entry?.hasKey ? "var(--ok)" : "var(--line)",
                   }}
                 />
-                <span style={{ fontSize: 13.5, color: "var(--text)" }}>
-                  {meta?.label ?? provider}
-                </span>
+                {hasProviderLogo(provider) ? <ProviderLogo provider={provider} /> : <span style={{ fontSize: 13.5, color: "var(--text)" }}>{meta?.label ?? provider}</span>}
                 {entry?.hasKey && (
                   <span style={{ fontSize: 11.5, color: "var(--text-faint)" }}>
                     ключ сохранён {entry.hint}

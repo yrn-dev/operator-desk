@@ -15,6 +15,9 @@ export type AiModel = {
   id: string;
   label: string;
   description?: string;
+  providerId?: string;
+  providerLogo?: React.ReactNode;
+  providerLogoCompact?: React.ReactNode;
   efforts?: AiModelEffort[];
   contexts?: Array<string | number>;
   supportsFast?: boolean;
@@ -164,8 +167,9 @@ export function ModelSelectorValue({ className, ...props }: React.HTMLAttributes
   const { models, selection, reducedMotion } = useSelector();
   const model = models.find((item) => item.id === selection.id);
   return <span data-slot="model-selector-value" className={cn("flex min-w-0 items-center", className)} {...props}>
-    <AnimatePresence mode="wait" initial={false}><motion.span key={`${selection.id}-${selection.effort}-${selection.thinking}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.15 }} className="flex min-w-0 items-baseline gap-1.5">
-      <span className="truncate font-medium text-foreground">{model?.label ?? "Выбрать модель"}</span>
+    <AnimatePresence mode="wait" initial={false}><motion.span key={`${selection.id}-${selection.effort}-${selection.thinking}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.15 }} className="flex min-w-0 items-center gap-2">
+      {model?.providerLogoCompact}
+      <span className="truncate font-medium text-foreground" title={model?.label}>{model?.label ?? "Выбрать модель"}</span>
       {selection.effort && <span className="shrink-0 text-muted-foreground">{selection.effort}</span>}
       {selection.fast && <span className="shrink-0 text-muted-foreground">Fast</span>}
       {selection.thinking && <span className="shrink-0 text-muted-foreground">Thinking</span>}
@@ -214,16 +218,22 @@ export const ModelSelectorContent = React.forwardRef<HTMLDivElement, ModelSelect
     }}>
       {children ?? <LayoutGroup><motion.ul role="presentation" className="flex max-h-[min(380px,60vh)] min-w-64 flex-col gap-0.5 overflow-y-auto rounded-2xl border-2 border-border bg-popover p-1.5 text-popover-foreground shadow-[0_8px_30px_-8px_rgba(0,0,0,.45)]" onMouseLeave={() => { if (!editing) setPanelId(null); }}>
         {models.length === 0 && <li className="px-3 py-2 text-xs text-muted-foreground">Список пуст — проверьте ключ провайдера.</li>}
-        {models.map((model, index) => <li key={model.id} role="none" className={cn("group relative flex items-center rounded-xl hover:bg-muted", index === focusIndex && "bg-muted/70")} onMouseEnter={() => { setFocusIndex(index); if (!editing) setPanelId(model.id); }}>
-          <button id={`${listId}-${index}`} type="button" role="option" aria-selected={selection.id === model.id} disabled={model.disabled} onFocus={() => { setFocusIndex(index); if (!editing) setPanelId(model.id); }} onClick={() => { choose(defaultSelectionFor(model)); setOpen(false); trigger.current?.focus(); }} className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring", selection.id === model.id && "bg-muted text-foreground")}>
-            <span className="min-w-0 flex-1 truncate font-medium">{model.label}</span>
+        {models.map((model, index) => <React.Fragment key={model.id}>
+          {model.providerLogo && (index === 0 || models[index - 1].providerId !== model.providerId) && <li role="presentation" aria-hidden="true"
+            className={cn("flex items-center px-2.5 pb-2 pt-2", index > 0 && "mt-1 border-t border-border pt-3")}>
+            {model.providerLogo}
+          </li>}
+          <li role="none" className={cn("group relative flex items-center rounded-xl hover:bg-muted", index === focusIndex && "bg-muted/70")} onMouseEnter={() => { setFocusIndex(index); if (!editing) setPanelId(model.id); }}>
+          <button id={`${listId}-${index}`} type="button" role="option" aria-selected={selection.id === model.id} disabled={model.disabled} title={model.description} onFocus={() => { setFocusIndex(index); if (!editing) setPanelId(model.id); }} onClick={() => { choose(defaultSelectionFor(model)); setOpen(false); trigger.current?.focus(); }} className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-55", selection.id === model.id && "bg-muted text-foreground")}>
+            <span className="min-w-0 flex-1"><span className="block truncate font-medium">{model.label}</span>{model.description && <span className="mt-0.5 block max-w-64 truncate text-[11px] font-normal text-muted-foreground">{model.description}</span>}</span>
             {selection.id === model.id && <CheckIcon size={14} className="shrink-0" aria-hidden />}
           </button>
-          {(!!model.efforts?.length || (model.contexts?.length ?? 0) > 1 || model.supportsFast || model.supportsThinking) && <button type="button" aria-label={`Настроить ${model.label}`} onClick={() => { setPanelId(model.id); setEditing(true); if (selection.id !== model.id) choose(defaultSelectionFor(model)); }} className={cn("mr-1 flex size-7 items-center justify-center rounded-lg text-muted-foreground opacity-0 hover:bg-accent group-hover:opacity-100 focus-visible:opacity-100", editing && panelId === model.id && "opacity-100")}><PencilIcon size={14} aria-hidden /></button>}
-        </li>)}
+          {(!!model.efforts?.length || (model.contexts?.length ?? 0) > 1 || model.supportsFast || model.supportsThinking) && <button type="button" disabled={model.disabled} aria-label={`Настроить ${model.label}`} onClick={() => { setPanelId(model.id); setEditing(true); if (selection.id !== model.id) choose(defaultSelectionFor(model)); }} className={cn("mr-1 flex size-7 items-center justify-center rounded-lg text-muted-foreground opacity-0 hover:bg-accent group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none", editing && panelId === model.id && "opacity-100")}><PencilIcon size={14} aria-hidden /></button>}
+        </li></React.Fragment>)}
       </motion.ul></LayoutGroup>}
     </div>
     <AnimatePresence>{panel && <motion.aside key={panel.id + editing} initial={{ opacity: 0, x: reducedMotion ? 0 : -6 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} className="w-52 shrink-0 rounded-2xl border-2 border-border bg-popover p-3 text-popover-foreground shadow-[0_8px_30px_-8px_rgba(0,0,0,.45)]">
+      {panel.providerLogo && <div className="mb-3">{panel.providerLogo}</div>}
       <div className="text-sm font-semibold">{panel.label}</div>
       {panel.description && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{panel.description}</p>}
       {!!panel.contexts?.length && <div className="mt-3 text-xs text-muted-foreground"><div className="mb-1 text-[10px] font-semibold uppercase">Context</div>{panel.contexts.map(formatContext).join(" · ")}</div>}

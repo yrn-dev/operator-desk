@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld("operator", {
   usagePreference: () => ipcRenderer.invoke("usage:preference"),
   setUsagePreference: (enabled: boolean) => ipcRenderer.invoke("usage:set", enabled),
   latestVersion: () => ipcRenderer.invoke("app:latestVersion"),
+  installUpdate: () => ipcRenderer.invoke("app:installUpdate"),
+  onUpdateProgress: (listener: Listener<{ received: number; total: number }>) => subscribe("app:updateProgress", listener),
   generateTitle: (firstMessage: string, cwd: string): Promise<string | null> =>
     ipcRenderer.invoke("session:title", { firstMessage, cwd }),
   attachPaths: (paths: string[]) => ipcRenderer.invoke("files:attach", { paths }),

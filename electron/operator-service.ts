@@ -7,9 +7,10 @@ declare const __OPERATOR_SERVICE_URL__: string;
 
 type Preference = { enabled: boolean | null; installationId?: string };
 type EventName = "app_open" | "agent_used";
-export type LatestVersion = { version: string; url: string; notes?: string };
+export type LatestVersion = { version: string; url: string; sha512: string; kind: "nsis" | "appimage" | "deb" | "pacman"; notes?: string };
 
 const origin = __OPERATOR_SERVICE_URL__.replace(/\/$/, "");
+const releaseManifestUrl = "https://opr.pzero.kz/download/operator-updates.json";
 let lastUseDay = "";
 
 function validOrigin(): boolean {
@@ -87,18 +88,32 @@ function isNewer(candidate: string, current: string): boolean {
 }
 
 export async function checkLatestVersion(): Promise<LatestVersion | null> {
-  if (!validOrigin() || !app.isPackaged) return null;
+  if (!app.isPackaged) return null;
   try {
-    const response = await fetch(`${origin}/v1/latest?platform=${encodeURIComponent(process.platform)}`, {
+    const response = await fetch(releaseManifestUrl, {
       signal: AbortSignal.timeout(5000),
       headers: { accept: "application/json" },
     });
     if (!response.ok) return null;
-    const value = await response.json() as Record<string, unknown>;
-    if (typeof value.version !== "string" || typeof value.url !== "string" || !isNewer(value.version, app.getVersion())) return null;
-    const url = new URL(value.url);
-    if (url.protocol !== "https:" || url.hostname !== "opr.pzero.kz" || !url.pathname.startsWith("/download/")) return null;
-    return { version: value.version, url: url.toString(), notes: typeof value.notes === "string" ? value.notes.slice(0, 300) : undefined };
+    const manifest = await response.json() as Record<string, any>;
+    const release = manifest.desktop;
+    if (typeof release?.version !== "string" || !isNewer(release.version, app.getVersion())) return null;
+    const platformPackages = release.packages?.[process.platform];
+    let kind: LatestVersion["kind"];
+    if (process.platform === "win32") kind = "nsis";
+    else if (process.platform === "linux") {
+      const osRelease = (() => { try { return fs.readFileSync("/etc/os-release", "utf8"); } catch { return ""; } })();
+      const distro = `${osRelease.match(/^ID=(.*)$/m)?.[1] ?? ""} ${osRelease.match(/^ID_LIKE=(.*)$/m)?.[1] ?? ""}`.toLowerCase().replaceAll('"', "");
+      kind = process.env.APPIMAGE ? "appimage" : /arch|manjaro/.test(distro) ? "pacman" : /debian|ubuntu|linuxmint|pop/.test(distro) ? "deb" : "appimage";
+    } else return null;
+    const asset = process.platform === "linux" ? platformPackages?.[kind] : platformPackages;
+    if (typeof asset?.url !== "string" || typeof asset.sha512 !== "string") return null;
+    const url = new URL(asset.url);
+    if (url.protocol !== "https:" || url.hostname !== "opr.pzero.kz" || !/^\/download\/Operator-\d+\.\d+\.\d+-/.test(url.pathname)) return null;
+    if (!path.basename(url.pathname).startsWith(`Operator-${release.version}-`)) return null;
+    if (!/^[A-Za-z0-9+/]{86}==$/.test(asset.sha512)) return null;
+    return { version: release.version, url: url.toString(), sha512: asset.sha512, kind,
+      notes: typeof release.notes === "string" ? release.notes.slice(0, 600) : undefined };
   } catch {
     return null;
   }

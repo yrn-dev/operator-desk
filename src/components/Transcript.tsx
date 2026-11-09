@@ -77,8 +77,7 @@ const ToolGroup = memo(function ToolGroup({ runs, pluginForTool, onSelectTool, s
 
 // Keep the current conversation small in the DOM. Earlier messages remain in
 // the session and can be revealed without another model request.
-const VISIBLE_GROUPS = 90;
-const groupId = (item: Say | Note | ToolRun[]) => Array.isArray(item) ? item[0].id : item.id;
+const WINDOW_ENTRIES = 500;
 
 /** Инструменты, вызванные подряд, показываются одним ходом работы. */
 function group(entries: Entry[]): Array<Say | Note | ToolRun[]> {
@@ -168,10 +167,9 @@ export const Transcript = memo(function Transcript({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  const groups = useMemo(() => group(entries), [entries]);
-  const [firstVisible, setFirstVisible] = useState<string | null>(null);
-  const anchored = firstVisible === null ? -1 : groups.findIndex((item) => groupId(item) === firstVisible);
-  const start = anchored >= 0 ? anchored : Math.max(0, groups.length - VISIBLE_GROUPS);
+  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
+  const start = anchorIndex ?? Math.max(0, entries.length - WINDOW_ENTRIES);
+  const groups = useMemo(() => group(entries.slice(start)), [entries, start]);
   const prepend = useRef<{ height: number; top: number } | null>(null);
 
   useLayoutEffect(() => {
@@ -181,14 +179,14 @@ export const Transcript = memo(function Transcript({
       el.scrollTop = prepend.current.top + el.scrollHeight - prepend.current.height;
       prepend.current = null;
     } else if (stick.current) el.scrollTop = el.scrollHeight;
-  }, [entries, firstVisible]);
+  }, [entries, start]);
 
   const onScroll = () => {
     const el = scroller.current;
     if (!el) return;
     const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 90;
-    if (stick.current && !bottom && groups[start]) setFirstVisible(groupId(groups[start]));
-    if (!stick.current && bottom) setFirstVisible(null);
+    if (stick.current && !bottom && entries[start]) setAnchorIndex(start);
+    if (!stick.current && bottom) setAnchorIndex(null);
     stick.current = bottom;
   };
 
@@ -197,7 +195,7 @@ export const Transcript = memo(function Transcript({
     if (!el || start === 0) return;
     stick.current = false;
     prepend.current = { height: el.scrollHeight, top: el.scrollTop };
-    setFirstVisible(groupId(groups[Math.max(0, start - VISIBLE_GROUPS)]));
+    setAnchorIndex(Math.max(0, start - WINDOW_ENTRIES));
   };
 
   return (
@@ -230,7 +228,7 @@ export const Transcript = memo(function Transcript({
         {start > 0 && <button type="button" className="history-more" onClick={showPrevious}>
           Показать предыдущие сообщения
         </button>}
-        {groups.slice(start).map((item) =>
+        {groups.map((item) =>
           Array.isArray(item) ? (
             <ToolGroup key={item[0].id} runs={item} pluginForTool={pluginForTool} onSelectTool={onSelectTool} selectedToolId={selectedToolId}
               inspectionRevision={inspectionRevision} onCloseTool={onCloseTool} />

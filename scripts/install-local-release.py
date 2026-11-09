@@ -8,7 +8,7 @@ import time
 
 project = Path(__file__).resolve().parents[1]
 version = json.loads((project / 'package.json').read_text())['version']
-installed = Path.home() / '.local/opt' / f'operator-desk-{version}-20261019'
+installed = Path(os.environ.get('OPERATOR_INSTALL_DIR', str(Path.home() / '.local/opt' / f'operator-desk-{version}-{time.strftime("%Y%m%d")}')))
 link = installed.parent / 'operator-desk'
 desktop = Path.home() / '.local/share/applications/operator-desk.desktop'
 evidence = json.loads((project / f'outputs/release-content-{version}.json').read_text())
@@ -27,7 +27,8 @@ assert not staged_link.exists() and not staged_link.is_symlink()
 staged_link.symlink_to(installed, target_is_directory=True)
 os.replace(staged_link, link)
 content = desktop.read_text().splitlines()
-content = [f'Exec={link}/operator-desk %U' if line.startswith('Exec=') else
+launch_flags = ' --ozone-platform=x11' if any(line.startswith('Exec=') and '--ozone-platform=x11' in line for line in content) else ''
+content = [f'Exec={link}/operator-desk{launch_flags} %U' if line.startswith('Exec=') else
            f'Comment=Operator Desktop {version}' if line.startswith('Comment=') else line for line in content]
 temp = desktop.with_suffix('.desktop.new')
 temp.write_text('\n'.join(content) + '\n')

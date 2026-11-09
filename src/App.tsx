@@ -9,6 +9,9 @@ import { KeysDialog } from "./components/KeysDialog.tsx";
 import { Readiness } from "./components/Readiness.tsx";
 import { UsageDialog } from "./components/UsageDialog.tsx";
 import { SubagentPanel } from "./components/SubagentPanel.tsx";
+import { SoundSettings } from "./components/SoundSettings.tsx";
+import { NotificationEvents } from "./notificationEvents.ts";
+import { playNotificationSound } from "./notificationSounds.ts";
 import { applyEvent, entriesFromMessages, errorNote, note, speak } from "./lineReducer.ts";
 import { indexPluginTools } from "./pluginTools.ts";
 import type {
@@ -33,6 +36,9 @@ export function App() {
   const [lines, setLines] = useState<Map<string, LineState>>(new Map());
   const [order, setOrder] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const activeLineId = useRef(activeId);
+  activeLineId.current = activeId;
+  const modelRefresh = useRef<Promise<void> | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -51,7 +57,13 @@ export function App() {
   const [keysOpen, setKeysOpen] = useState(false);
   const [readyOpen, setReadyOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
-  const [latestVersion, setLatestVersion] = useState<{ version: string; url: string; notes?: string } | null>(null);
+  const [soundsOpen, setSoundsOpen] = useState(false);
+  const [notifications] = useState(() => new NotificationEvents());
+  const openSounds = useCallback(() => setSoundsOpen(true), []);
+  const closeSounds = useCallback(() => setSoundsOpen(false), []);
+  const [latestVersion, setLatestVersion] = useState<{ version: string; url: string; sha512: string; kind: "nsis" | "appimage" | "deb" | "pacman"; notes?: string } | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<{ received: number; total: number } | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<{ lineId: string; toolId: string } | null>(null);
   const [inspectionRevision, setInspectionRevision] = useState(0);
@@ -111,13 +123,26 @@ export function App() {
       if (pref.configured && pref.enabled === null) setUsageOpen(true);
     });
     void window.operator.latestVersion().then(setLatestVersion);
+    const offProgress = window.operator.onUpdateProgress(setUpdateProgress);
+    return offProgress;
+  }, []);
+
+  const installUpdate = useCallback(() => {
+    setUpdateError(null);
+    setUpdateProgress({ received: 0, total: 0 });
+    void window.operator.installUpdate().catch((error) => {
+      setUpdateError(error instanceof Error ? error.message : String(error));
+      setUpdateProgress(null);
+    });
   }, []);
 
   // Запросы разрешений и служебные сигналы моста.
   useEffect(() => {
     const offAsk = window.operator.onBridgeAsk(({ id, request }) => {
       if (request.method !== "select" && request.method !== "confirm") return;
-      setAsks((prev) => [
+      const cue = notifications.question(id, request.id);
+      if (cue) void playNotificationSound(cue);
+      setAsks((prev) => prev.some(ask => ask.lineId === id && ask.requestId === request.id) ? prev : [
         ...prev,
         {
           requestId: request.id,
@@ -161,7 +186,7 @@ export function App() {
       offAsk();
       offSignal();
     };
-  }, []);
+  }, [notifications]);
 
   /**
    * Файл сессии у новой ленты появляется не при открытии, а когда оператор
@@ -184,7 +209,23 @@ export function App() {
 
   // Поток событий из процессов operator.
   useEffect(() => {
+    const pendingUpdates = new Map<string, Record<string, any>>();
+    let updateFrame = 0;
+    const flushUpdates = () => {
+      if (updateFrame) cancelAnimationFrame(updateFrame);
+      updateFrame = 0;
+      for (const [id, event] of pendingUpdates) patch(id, (line) => applyEvent(line, event));
+      pendingUpdates.clear();
+    };
     const offEvent = window.operator.onEvent(({ id, event }) => {
+      if (event.type === "message_update") {
+        pendingUpdates.set(id, event);
+        if (!updateFrame) updateFrame = requestAnimationFrame(flushUpdates);
+        return;
+      }
+      flushUpdates();
+      const cue = notifications.event(id, event);
+      if (cue) void playNotificationSound(cue);
       patch(id, (line) => applyEvent(line, event));
       if (event.type === "agent_end") {
         refreshHistory();
@@ -192,9 +233,11 @@ export function App() {
       }
     });
     const offFatal = window.operator.onFatal(({ id, message }) => {
+      notifications.cancel(id);
       patch(id, (line) => errorNote({ ...line, lamp: "off", sending: false, loading: false }, message));
     });
     const offExit = window.operator.onExit(({ id }) => {
+      notifications.cancel(id);
       patch(id, (line) =>
         errorNote(
           { ...line, lamp: "off", sending: false, loading: false },
@@ -203,11 +246,12 @@ export function App() {
       );
     });
     return () => {
+      if (updateFrame) cancelAnimationFrame(updateFrame);
       offEvent();
       offFatal();
       offExit();
     };
-  }, [patch, refreshHistory, syncSessionFile]);
+  }, [patch, refreshHistory, syncSessionFile, notifications]);
 
   const openSession = useCallback(
     async (cwd: string, restore?: SessionSummary) => {
@@ -256,6 +300,16 @@ export function App() {
           contextWindow: state?.model?.contextWindow ?? line.contextWindow,
           thinkingLevel: state?.thinkingLevel ?? line.thinkingLevel,
         }));
+        if (restore) {
+          await window.operator.send(id, "switch_session", { sessionPath: restore.path });
+          const payload = await window.operator.send<any>(id, "get_messages");
+          patch(id, (line) => ({
+            ...line,
+            entries: entriesFromMessages(payload),
+            loading: false,
+          }));
+        }
+
         if (models.length === 0) {
           // RPC отдаёт объект со списком, а не сам массив.
           const payload = await window.operator.send<any>(id, "get_available_models");
@@ -269,15 +323,6 @@ export function App() {
           setCommands(Array.isArray(list) ? list : []);
         }
 
-        if (restore) {
-          await window.operator.send(id, "switch_session", { sessionPath: restore.path });
-          const payload = await window.operator.send<any>(id, "get_messages");
-          patch(id, (line) => ({
-            ...line,
-            entries: entriesFromMessages(payload),
-            loading: false,
-          }));
-        }
       } catch (error) {
         patch(id, (line) => errorNote({ ...line, loading: false }, error));
       }
@@ -299,6 +344,14 @@ export function App() {
   }, []);
 
   const active = activeId ? lines.get(activeId) : undefined;
+  const refreshModels = useCallback(() => {
+    if (!activeId || modelRefresh.current) return;
+    const id = activeId;
+    modelRefresh.current = window.operator.send<any>(id, "get_available_models").then(payload => {
+      const list = Array.isArray(payload) ? payload : payload?.models;
+      if (activeLineId.current === id && Array.isArray(list)) setModels(list);
+    }).catch(() => {}).finally(() => { modelRefresh.current = null; });
+  }, [activeId]);
   const selectTool = useCallback((run: ToolRun) => {
     if (run.name === "subagent") {
       setSelectedSubagentId(run.id);
@@ -415,6 +468,7 @@ export function App() {
 
   const closeSession = useCallback(
     (id: string) => {
+      notifications.close(id);
       window.operator.close(id);
       setLines((prev) => {
         const next = new Map(prev);
@@ -427,7 +481,7 @@ export function App() {
         return next;
       });
     },
-    [],
+    [notifications],
   );
 
   // Задание из OPERATOR_DESK_PROMPT уходит, как только первая сессия готова.
@@ -467,6 +521,7 @@ export function App() {
       {readyOpen && <Readiness onClose={() => setReadyOpen(false)} />}
 
       {usageOpen && <UsageDialog onClose={() => setUsageOpen(false)} />}
+      {soundsOpen && <SoundSettings onClose={closeSounds} />}
 
       {toast && (
         <div
@@ -584,6 +639,7 @@ export function App() {
           onOpenMcp={() => setMcpOpen(true)}
           onOpenReadiness={() => setReadyOpen(true)}
           onOpenUsage={() => setUsageOpen(true)}
+          onOpenSounds={openSounds}
           subagentCount={subagentRuns.length}
           subagentsOpen={subagentPanelOpen}
           onToggleSubagents={() => setSubagentPanelOpen((open) => !open)}
@@ -604,8 +660,10 @@ export function App() {
 
         {latestVersion && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderBottom: "1px solid var(--line)", background: "var(--bg-raised)", color: "var(--text-muted)", fontSize: 12.5 }}>
-            <span style={{ flex: 1 }}>Доступен Operator {latestVersion.version}{latestVersion.notes ? ` · ${latestVersion.notes}` : ""}</span>
-            <button onClick={() => void window.operator.openLink(latestVersion.url)} style={{ color: "var(--text)", textDecoration: "underline" }}>Скачать обновление</button>
+            <span style={{ flex: 1 }}>Вышел Operator {latestVersion.version}{latestVersion.notes ? ` · ${latestVersion.notes}` : ""}{updateError ? ` · ${updateError}` : ""}</span>
+            <button disabled={Boolean(updateProgress)} onClick={installUpdate} style={{ color: "var(--text)", textDecoration: "underline", opacity: updateProgress ? 0.6 : 1 }}>
+              {updateProgress ? updateProgress.total ? `Загружаю ${Math.min(100, Math.round(updateProgress.received / updateProgress.total * 100))}%` : "Готовлю обновление…" : "Обновить сейчас"}
+            </button>
             <button onClick={() => setLatestVersion(null)} aria-label="Скрыть уведомление" style={{ color: "var(--text-faint)", fontSize: 17 }}>×</button>
           </div>
         )}
@@ -632,6 +690,7 @@ export function App() {
           commands={commands}
           line={active}
           models={models}
+          onRefreshModels={refreshModels}
           onSetModel={(provider, id) => {
             if (activeId) {
               patch(activeId, (line) => ({
@@ -668,7 +727,7 @@ export function App() {
             }
           }}
           onSend={send}
-          onAbort={() => call("abort")}
+          onAbort={() => { if (activeId) notifications.cancel(activeId); void call("abort"); }}
         />
       </main>
       {subagentRuns.length > 0 && subagentPanelOpen && (

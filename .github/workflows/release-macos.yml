@@ -1,0 +1,91 @@
+name: Build and publish macOS releases
+
+on:
+  push:
+    tags:
+      - "v0.*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Check tag matches app version
+        id: version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$GITHUB_REF_NAME" = "v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+      - name: Bundle the pinned Operator core
+        run: node scripts/bundle-operator.mjs
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Package macOS app
+        run: npx electron-builder --mac dmg zip --${{ matrix.arch }}
+      - name: Verify output files
+        shell: bash
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          test -s "release/Operator-${version}-mac-${{ matrix.arch }}.dmg"
+          test -s "release/Operator-${version}-mac-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mac-${{ matrix.arch }}
+          path: |
+            release/Operator-${{ steps.version.outputs.version }}-mac-${{ matrix.arch }}.dmg
+            release/Operator-${{ steps.version.outputs.version }}-mac-${{ matrix.arch }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: mac-*
+          path: release
+          merge-multiple: true
+      - name: Create stable download names and checksums
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp "release/Operator-${version}-mac-arm64.zip" release/Operator-mac-arm64.zip
+          cp "release/Operator-${version}-mac-x64.zip" release/Operator-mac-x64.zip
+          shasum -a 256 release/*.dmg release/*.zip > release/SHA256SUMS-macOS.txt
+      - name: Create release and upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Operator Desktop ${GITHUB_REF_NAME#v}" \
+              --notes-file MACOS_INSTALL.md
+          fi
+          gh release upload "$GITHUB_REF_NAME" release/* \
+            --repo "$GITHUB_REPOSITORY" --clobber

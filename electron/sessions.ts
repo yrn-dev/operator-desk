@@ -115,11 +115,17 @@ export async function listSessions(own: Set<string> = new Set()): Promise<Sessio
   // Имя файла начинается с метки времени, так что свежие видно без stat.
   files.sort((a, b) => path.basename(b).localeCompare(path.basename(a)));
 
+  const candidates = files.slice(0, MAX_SESSIONS);
   const summaries: SessionSummary[] = [];
-  for (const file of files.slice(0, MAX_SESSIONS)) {
-    const summary = await readSession(file, own);
-    if (summary) summaries.push(summary);
-  }
+  let next = 0;
+  const workers = Array.from({ length: Math.min(8, candidates.length) }, async () => {
+    while (next < candidates.length) {
+      const file = candidates[next++];
+      const summary = await readSession(file, own);
+      if (summary) summaries.push(summary);
+    }
+  });
+  await Promise.all(workers);
 
   summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return summaries;

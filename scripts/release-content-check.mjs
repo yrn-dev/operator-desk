@@ -1,7 +1,7 @@
 /** Ensure both distributables contain the reviewed core and Desktop runtime. */
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {readFile, writeFile} from 'node:fs/promises';
+import {readFile, writeFile, readdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {extractFile} from '@electron/asar';
 import yaml from 'js-yaml';
@@ -12,8 +12,15 @@ const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const coreFiles=['core/agent-session.js','core/model-registry.js','core/compaction/compaction.js',
   'core/compaction/recovery.js','core/tools/read-full.js'];
 const bridgeFiles=['command-policy.mjs','tool-discovery.mjs','mcp.mjs','desk-bridge.mjs'];
+const overrides=JSON.parse(await readFile(new URL('../core-overrides/manifest.json',import.meta.url),'utf8'));
+for(const entry of overrides.files)if(!coreFiles.includes(entry.path))coreFiles.push(entry.path);
+bridgeFiles.push('browser.mjs','desk-prompt.md');
+const directoryOnly=process.argv.includes('--dir');
+const requested=process.argv.slice(2).filter(arg=>arg!=='--dir');
+const platforms=requested.length?requested:['linux','win'];
+assert.ok(platforms.every(p=>['linux','win'].includes(p)));
 const results=[];
-for(const platform of ['linux','win']){
+for(const platform of platforms){
   const resources=join(root,`${platform}-unpacked/resources`);
   const asar=join(resources,'app.asar');
   const info=JSON.parse(extractFile(asar,'package.json').toString());
@@ -30,11 +37,15 @@ for(const platform of ['linux','win']){
   for(const file of ['dist-electron/main.js','dist-electron/preload.cjs','dist/index.html']){
     assert.equal(hash(extractFile(asar,file)),hash(await readFile(new URL(`../${file}`,import.meta.url))),`${platform}/${file}`);
   }
+  for(const name of await readdir(new URL('../dist/assets/',import.meta.url))){
+    const file=`dist/assets/${name}`;
+    assert.equal(hash(extractFile(asar,file)),hash(await readFile(new URL(`../${file}`,import.meta.url))),`${platform}/${file}`);
+  }
   results.push({platform,version,reviewedCoreAndBridge:true,asarSha256:hash(await readFile(asar))});
 }
 const core=await readFile(new URL('../vendor/node_modules/pzero-operator/dist/core/agent-session.js',import.meta.url),'utf8');
 assert.match(core,/Math\.ceil\(window \* 0\.2\)/,'Production must keep the 20% reserve');
-for(const name of ['latest.yml','latest-linux.yml']){
+for(const name of directoryOnly?[]:['latest.yml','latest-linux.yml'].filter(name=>platforms.includes(name==='latest.yml'?'win':'linux'))){
   const feed=yaml.load(await readFile(join(root,name),'utf8'));assert.equal(feed.version,version);
   for(const file of feed.files){
     const bytes=await readFile(join(root,file.url));
@@ -43,4 +54,4 @@ for(const name of ['latest.yml','latest-linux.yml']){
   }
 }
 await writeFile(new URL(`../outputs/release-content-${version}.json`,import.meta.url),JSON.stringify({passed:true,results},null,2));
-console.log('PASS Linux/Windows reviewed core, 80% threshold, bridges, application version and feed checksums');
+console.log(`PASS ${platforms.join('/')} reviewed core, 80% threshold, bridges, application version${directoryOnly?' (directory build)':' and feed checksums'}`);

@@ -42,10 +42,15 @@ for artifact in manifest['artifacts']:
     path = '/download/' + artifact['file']
     with request(path, 'HEAD') as response:
         assert response.status == 200
-        assert int(response.headers['Content-Length']) == artifact['bytes'], artifact['file']
+        content_length = response.headers.get('Content-Length')
+        if content_length is not None:
+            assert int(content_length) == artifact['bytes'], artifact['file']
+        else:
+            assert artifact['file'] == 'operator-updates.json', artifact['file']
         assert 'attachment' in response.headers.get('Content-Disposition', ''), artifact['file']
-    if artifact['file'].startswith('latest'):
+    if artifact['file'].startswith('latest') or artifact['file'] == 'operator-updates.json':
         content = request(f'{path}?release={version}').read()
+        assert len(content) == artifact['bytes'], artifact['file']
         assert hashlib.sha256(content).hexdigest() == artifact['sha256']
     files.append({'file': artifact['file'], 'bytes': artifact['bytes'], 'http': 200})
     print('PASS public download:', artifact['file'], flush=True)

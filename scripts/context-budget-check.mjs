@@ -42,7 +42,7 @@ try{
   const search=tools.get('tool_search');
   await search.execute('fixture',{query:'tiny__echo'});
   assert.deepEqual(active,['tool_search','tiny__echo']);
-  discovery.beforePrompt();assert.deepEqual(active,['tool_search']);
+  discovery.beforePrompt();assert.deepEqual(active,['tool_search','tiny__echo']);
   const fixture=join(root,'large.txt');
   const content=Array.from({length:6000},(_,index)=>`LINE_${String(index).padStart(5,'0')} ${'data '.repeat(18)}`).join('\n');
   await fs.writeFile(fixture,content);

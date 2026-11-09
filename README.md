@@ -3,9 +3,11 @@
 Настольный коммутатор для агента [operator](https://github.com/yrn-dev/Operator) (CLI, npm `pzero-operator`).
 Исходники: [yrn-dev/operator-desk](https://github.com/yrn-dev/operator-desk).
 
-**Собрать на Windows или macOS:** откройте [BUILD.md](BUILD.md), раздел «Коротко: только команды».
-На MacBook: `git clone https://github.com/yrn-dev/operator-desk.git`, затем
-`cd operator-desk && npm ci && CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac`.
+**Скачать готовую macOS-сборку:** откройте [GitHub Releases](https://github.com/yrn-dev/operator-desk/releases/latest).
+Apple Silicon устанавливается командой из [MACOS_INSTALL.md](MACOS_INSTALL.md);
+там же есть команда для Intel. Сборка и загрузка файлов происходят через GitHub Actions.
+
+**Собрать из исходников:** откройте [BUILD.md](BUILD.md), раздел «Коротко: только команды».
 
 Не эмулятор терминала: приложение поднимает `opr --mode rpc` и говорит с ним
 по JSONL, а весь диалог, инструменты и телеметрию рисует само.
@@ -206,7 +208,7 @@ OPERATOR_SERVICE_URL=http://127.0.0.1:8777 npm run dist:linux
 
 После подключения сервиса приложение при первом запуске спрашивает согласие.
 При согласии `POST /v1/events` получает JSON вида
-`{"event":"app_open","installationId":"UUID","version":"0.3.5","platform":"linux"}`.
+`{"event":"app_open","installationId":"UUID","version":"0.3.8","platform":"linux"}`.
 Событие `agent_used` отправляется при первом запросе к агенту за каждый день.
 Без согласия запросов статистики нет; отключение в меню «… → Статистика
 использования» удаляет локальный ID установки. Текст диалогов и файлы не
@@ -214,7 +216,7 @@ OPERATOR_SERVICE_URL=http://127.0.0.1:8777 npm run dist:linux
 
 Проверка обновлений не зависит от согласия и запрашивает
 `GET /v1/latest?platform=linux` (`win32` или `darwin` на других системах).
-Ответ: `{"version":"0.3.5","url":"https://opr.pzero.kz/download/Operator-0.3.5-linux-x86_64.AppImage","notes":"Что изменилось"}`.
+Ответ: `{"version":"0.3.8","url":"https://opr.pzero.kz/download/Operator-0.3.8-linux-x86_64.AppImage","notes":"Что изменилось"}`.
 Приложение показывает ссылку на скачивание, если версия новее установленной.
 Оно не устанавливает обновление автоматически. Сервер должен отдавать ссылку
 именно с `https://opr.pzero.kz/download/`.
@@ -223,7 +225,7 @@ OPERATOR_SERVICE_URL=http://127.0.0.1:8777 npm run dist:linux
 файлы (например, в логах веб-сервера или через отдельный download endpoint).
 Установки прежних версий не сообщат об активности, пока пользователь не
 обновится до версии с этой функцией. Версия 0.3.1 также не умеет показывать
-уведомление об обновлении, поэтому о переходе на 0.3.5 нужно сообщить
+уведомление об обновлении, поэтому о переходе на 0.3.8 нужно сообщить
 через обычный канал распространения.
 
 Сервис находится в `service/server.py`. На этом ноутбуке его запускает

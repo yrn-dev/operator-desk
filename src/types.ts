@@ -196,6 +196,7 @@ export type ModelInfo = {
   id: string;
   contextWindow: number;
   reasoning: boolean;
+  ollama?: { source: "local" | "cloud"; running: boolean; installed: boolean; capabilities: string[] };
 };
 
 declare global {
@@ -233,7 +234,9 @@ declare global {
       openLink(url: string): Promise<void>;
       usagePreference(): Promise<{ enabled: boolean | null; configured: boolean }>;
       setUsagePreference(enabled: boolean): Promise<{ enabled: boolean | null; configured: boolean }>;
-      latestVersion(): Promise<{ version: string; url: string; notes?: string } | null>;
+      latestVersion(): Promise<{ version: string; url: string; sha512: string; kind: "nsis" | "appimage" | "deb" | "pacman"; notes?: string } | null>;
+      installUpdate(): Promise<{ ok: boolean }>;
+      onUpdateProgress(listener: (progress: { received: number; total: number }) => void): () => void;
       generateTitle(firstMessage: string, cwd: string): Promise<string | null>;
       attachPaths(paths: string[]): Promise<Attachment[]>;
       pathForFile(file: File): string;

@@ -15,6 +15,7 @@ export function Composer({
   onSetModel,
   onSetThinking,
   onOpenKeys,
+  onRefreshModels,
   autopilot,
   screenEnv,
   onAutopilotChange,
@@ -33,6 +34,7 @@ export function Composer({
   onSetModel: (provider: string, id: string) => void;
   onSetThinking: (level: string) => void;
   onOpenKeys: () => void;
+  onRefreshModels: () => void;
   autopilot: boolean;
   screenEnv: ScreenEnv | null;
   onAutopilotChange: (enabled: boolean) => void;
@@ -340,11 +342,12 @@ export function Composer({
             alignItems: "center",
             gap: 10,
             marginTop: 8,
+            flexWrap: "wrap",
             fontSize: 11.5,
             color: "var(--text-faint)",
           }}
         >
-          <ModelPicker line={line} models={models} onSetModel={onSetModel} onSetThinking={onSetThinking} onOpenKeys={onOpenKeys} />
+          <ModelPicker line={line} models={models} onSetModel={onSetModel} onSetThinking={onSetThinking} onOpenKeys={onOpenKeys} onRefreshModels={onRefreshModels} />
 
           <Autopilot enabled={autopilot} env={screenEnv} onChange={onAutopilotChange} />
 

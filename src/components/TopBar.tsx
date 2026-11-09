@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Job, LineState } from "../types.ts";
+import { ToolIcon } from "./ToolIcon.tsx";
 
 const ghost: React.CSSProperties = {
   padding: "5px 9px",
@@ -20,6 +21,7 @@ export function TopBar({
   onOpenMcp,
   onOpenReadiness,
   onOpenUsage,
+  onOpenSounds,
   subagentCount,
   subagentsOpen,
   onToggleSubagents,
@@ -34,6 +36,7 @@ export function TopBar({
   onOpenMcp: () => void;
   onOpenReadiness: () => void;
   onOpenUsage: () => void;
+  onOpenSounds: () => void;
   subagentCount: number;
   subagentsOpen: boolean;
   onToggleSubagents: () => void;
@@ -145,14 +148,9 @@ export function TopBar({
       {jobs.some((job) => job.alive) && (
         <span
           title={jobs.filter((job) => job.alive).map((job) => job.name).join("\n")}
-          style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ok)" }}
+          style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ok)", whiteSpace: "nowrap", flex: "none" }}
         >
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
-            <circle cx="6" cy="6" r="4.6" stroke="currentColor" strokeWidth="1.3" opacity="0.35" />
-            <path d="M6 1.4a4.6 4.6 0 014.6 4.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-              <animateTransform attributeName="transform" type="rotate" from="0 6 6" to="360 6 6" dur="1s" repeatCount="indefinite" />
-            </path>
-          </svg>
+          <ToolIcon name="background_run" color="currentColor" />
           {jobs.filter((job) => job.alive).length} в фоне
         </span>
       )}
@@ -196,6 +194,9 @@ export function TopBar({
         </button>
         {menu === "more" && (
           <Menu>
+            <MenuItem onClick={() => { onOpenSounds(); setMenu(null); }}>
+              Звуковые уведомления
+            </MenuItem>
             <MenuItem
               onClick={() => {
                 onNewSession();

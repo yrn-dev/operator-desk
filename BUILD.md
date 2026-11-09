@@ -37,11 +37,13 @@ node -p "require('./package.json').version"
 node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 ```
 
-Если проект уже скачан, начните с `cd operator-desk`. Готовые `.dmg` и `.zip`
-из `release/` загрузите в GitHub Releases для версии 0.3.5 и передайте ссылку
-на релиз для обновления сайта загрузки.
+Если нужна готовая версия, не собирайте её вручную: скачайте `.dmg` или `.zip`
+из [GitHub Releases](https://github.com/yrn-dev/operator-desk/releases/latest).
+Короткие команды установки и разница между Apple Silicon и Intel есть в
+[MACOS_INSTALL.md](MACOS_INSTALL.md). GitHub Actions собирает обе архитектуры
+на соответствующих macOS runner-ах.
 
-Две последние строки должны напечатать **`0.3.5`** (версия приложения) и
+Две последние строки должны напечатать **`0.3.8`** (версия приложения) и
 **`1.2.3`** (версия ядра). Если цифры другие — архив старый, попросите у автора
 новый.
 
@@ -49,8 +51,8 @@ node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 
 | Система | Что отправить автору |
 | --- | --- |
-| Windows | `Operator-0.3.5-win-x64.exe` и `Operator-0.3.5-win-x64-portable.exe` |
-| macOS | `Operator-0.3.5-mac-arm64.dmg`, `Operator-0.3.5-mac-x64.dmg` и оба `.zip` |
+| Windows | `Operator-0.3.8-win-x64.exe` и `Operator-0.3.8-win-x64-portable.exe` |
+| macOS | `Operator-0.3.8-mac-arm64.dmg`, `Operator-0.3.8-mac-x64.dmg` и оба `.zip` |
 
 Если какая-то команда упала — подробные шаги и разбор ошибок ниже, начиная с
 раздела 1. На Windows `EPERM ... symlink`
@@ -314,6 +316,11 @@ npm run dist:mac
 нужно.
 # Сборка с локально изменённым ядром
 
+Обычная сборка автоматически применяет проверенные исправления из `core-overrides`
+к закреплённому npm-пакету ядра. Контрольные суммы проверяются до записи файлов.
+Не удаляй эту папку из исходного архива. Явный `OPERATOR_SOURCE` выбирает локальное
+ядро вместо этих исправлений.
+
 Чтобы включить изменения CLI в Desktop, перед сборкой явно укажи каталог ядра:
 
 ```bash
@@ -343,3 +350,26 @@ node scripts/universal-agent-live-check.mjs
 инструкции Desk). Повторяющийся текст добавляется один раз. Пустой список явных
 дополнений сохраняет найденные файлы; SDK `appendSystemPromptOverride` позволяет
 явно заменить весь итоговый список.
+
+Проверки скорости и надёжности 0.3.7:
+
+```bash
+npm run check:performance
+npm run check:performance-live
+```
+
+Первая проверка не обращается к модели. Вторая использует настроенный Alem AI,
+работает с синтетическими файлами и отдельной историей в `/tmp`.
+Для Linux-сборки в каталог и проверки её содержимого:
+
+```bash
+npm run build
+npx electron-builder --linux --dir --config.directories.output=release/0.3.7
+node scripts/release-content-check.mjs linux --dir
+python3 scripts/release-runtime-check.py 0.3.7
+python3 scripts/desktop-performance-check.py
+```
+
+Последняя проверка запускает приложение на виртуальном экране (`xvfb-run`),
+читает настроенный ключ Alem AI и проверяет отправку синтетического файла только
+локальному серверу. Использует отдельные профиль Desktop и историю агента.

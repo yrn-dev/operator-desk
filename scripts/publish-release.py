@@ -22,13 +22,16 @@ def digest(file):
     return h.hexdigest()
 
 for name, expected in data['original'].items():
-    original = downloads / name if name == 'SHA256SUMS.txt' else site / name
-    assert digest(original) == expected, f'Live file changed since inspection: {original}'
+    original = downloads / name if name in ['SHA256SUMS.txt', 'operator-updates.json'] else site / name
+    if name == 'operator-updates.json' and expected is None:
+        assert not original.exists(), f'Live update manifest appeared after inspection: {original}'
+    else:
+        assert digest(original) == expected, f'Live file changed since inspection: {original}'
 for artifact in data['artifacts']:
     file = stage / artifact['file']
     assert file.stat().st_size == artifact['bytes'], f'Incomplete upload: {file}'
     assert digest(file) == artifact['sha256'], f'Checksum mismatch: {file}'
-    if (downloads / file.name).exists() and not file.name.startswith('latest'):
+    if (downloads / file.name).exists() and not file.name.startswith('latest') and file.name != 'operator-updates.json':
         assert digest(downloads / file.name) == artifact['sha256'], f'Another build already published: {file.name}'
 for name, expected in data['pages'].items():
     assert digest(stage / name) == expected, f'Page checksum mismatch: {name}'
@@ -39,7 +42,9 @@ for name in re.findall(r'href="\./download/([^"?#]+)', index):
 backup = Path('/root/operator-release-backups') / time.strftime(f'{version}-%Y%m%d-%H%M%S', time.gmtime())
 backup.mkdir(parents=True)
 for name in data['original']:
-    shutil.copy2(downloads / name if name == 'SHA256SUMS.txt' else site / name, backup / name)
+    original = downloads / name if name in ['SHA256SUMS.txt', 'operator-updates.json'] else site / name
+    if original.exists():
+        shutil.copy2(original, backup / name)
 for name in ['latest.yml', 'latest-linux.yml']:
     if (downloads / name).exists():
         shutil.copy2(downloads / name, backup / name)
@@ -54,8 +59,24 @@ for name in [f'SHA256SUMS-{version}.txt', 'SHA256SUMS.txt', 'app.js', 'index.htm
     destination = downloads / name if name.startswith('SHA256SUMS') else site / name
     (stage / name).chmod(0o644)
     os.replace(stage / name, destination)
+# Move the previous Desktop installers out of the public download directory,
+# after validating them against the checksum list captured before publication.
+old_archive = backup / f'old-{data["previous"]}-downloads'
+old_archive.mkdir()
+old_sums = backup / 'SHA256SUMS.txt'
+for line in old_sums.read_text().splitlines():
+    match = re.fullmatch(r'([0-9a-f]{64})  (.+)', line)
+    assert match, f'Invalid prior checksum entry: {line!r}'
+    expected, name = match.groups()
+    if not (name.startswith(f'Operator-{data["previous"]}-') or name == f'CHANGELOG-{data["previous"]}.md'):
+        continue
+    assert Path(name).name == name, f'Unsafe prior filename: {name!r}'
+    original = downloads / name
+    if original.exists():
+        assert digest(original) == expected, f'Prior release checksum mismatch: {name}'
+        shutil.move(original, old_archive / name)
 result = {'version': version, 'site': 'https://opr.pzero.kz', 'backup': str(backup),
-          'artifactChecksumsVerified': True, 'oldDownloadsRetained': True, 'macOSVersion': '0.3.1',
+          'artifactChecksumsVerified': True, 'oldDownloadsArchived': str(old_archive), 'macOSVersion': '0.3.1',
           'publishedAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
 for folder in [stage, backup]:
     (folder / 'result.json').write_text(json.dumps(result, indent=2) + '\n')

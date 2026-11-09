@@ -1,6 +1,6 @@
 {
   "name": "operator-desk",
-  "version": "0.3.5",
+  "version": "0.3.8",
   "description": "Operator — настольное приложение для ИИ-агента operator",
   "desktopName": "operator-desk.desktop",
   "main": "dist-electron/main.js",
@@ -24,7 +24,12 @@
     "check:compaction": "node scripts/compaction-recovery-check.mjs",
     "check:context-budget": "node scripts/context-budget-check.mjs",
     "zip:source": "rm -f ../operator-desk-source.zip && zip -rq ../operator-desk-source.zip . -x 'node_modules/*' -x 'dist/*' -x 'dist-electron/*' -x 'release/*' -x 'vendor/*' -x '.git/*' && echo '../operator-desk-source.zip готов'",
-    "dist:linux:pacman": "node scripts/bundle-operator.mjs && vite build && electron-builder --linux pacman"
+    "dist:linux:pacman": "node scripts/bundle-operator.mjs && vite build && electron-builder --linux pacman",
+    "check:performance": "node scripts/performance-check.mjs",
+    "check:performance-live": "node scripts/performance-live-check.mjs",
+    "check:notifications": "node --import tsx scripts/notification-check.ts",
+    "check:ollama": "node scripts/ollama-check.mjs",
+    "release:manifest": "node scripts/create-update-manifest.mjs"
   },
   "author": "yernur",
   "license": "MIT",
@@ -173,12 +178,15 @@
       {
         "provider": "github",
         "owner": "yrn-dev",
-        "repo": "operator"
+        "repo": "operator-desk"
       }
     ],
     "nsis": {
       "include": "build/installer.nsh",
-      "installerLanguages": ["ru_RU", "en_US"],
+      "installerLanguages": [
+        "ru_RU",
+        "en_US"
+      ],
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

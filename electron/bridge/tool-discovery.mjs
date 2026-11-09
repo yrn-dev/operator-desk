@@ -2,7 +2,16 @@
 export function createToolDiscovery(operator) {
   const deferred = new Map();
   const catalog = new Map();
-  const loaded = new Set();
+  const loaded = new Map();
+  const MAX_LOADED = 6;
+  const MAX_SCHEMA_CHARS = 32000;
+  const remember = tool => {
+    loaded.delete(tool.name);
+    loaded.set(tool.name, JSON.stringify({ name: tool.name, description: tool.description, parameters: tool.parameters }).length);
+    while (loaded.size > 1 && (loaded.size > MAX_LOADED || [...loaded.values()].reduce((a, b) => a + b, 0) > MAX_SCHEMA_CHARS)) {
+      loaded.delete(loaded.keys().next().value);
+    }
+  };
   const apply = () => {
     operator.setActiveTools(operator.getActiveTools().filter(name => !deferred.has(name) || loaded.has(name)));
   };
@@ -24,13 +33,12 @@ export function createToolDiscovery(operator) {
         return { tool, score };
       }).filter(x => x.score > 0).sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name))
         .slice(0, Math.max(1, Math.min(5, limit)));
-      // Replace previously loaded schemas to keep repeated searches bounded.
-      loaded.clear();
-      for (const { tool } of matches) loaded.add(tool.name);
+      // Keep recently needed tools together; evict old schemas within a fixed budget.
+      for (const { tool } of matches) remember(tool);
       const active = operator.getActiveTools().filter(name => !deferred.has(name));
-      operator.setActiveTools([...active, ...loaded]);
+      operator.setActiveTools([...active, ...loaded.keys()]);
       return { content: [{ type: "text", text: matches.length
-        ? JSON.stringify(matches.map(({ tool }) => ({ name: tool.name, description: tool.description.slice(0, 400) })))
+        ? JSON.stringify(matches.filter(({ tool }) => loaded.has(tool.name)).map(({ tool }) => ({ name: tool.name, description: tool.description.slice(0, 400) })))
         : `No matching tools. Available services: ${[...catalog.keys()].join(", ")}. Try an English action or service name.` }] };
     },
   });
@@ -40,7 +48,6 @@ export function createToolDiscovery(operator) {
       for (const tool of tools) deferred.set(tool.name, tool);
     },
     beforePrompt() {
-      loaded.clear();
       apply();
       return [...catalog].map(([server, names]) => `${server}: ${names.slice(0, 24).map(n => n.replace(`${server.replace(/[^a-zA-Z0-9_]/g, "_")}__`, "")).join(", ")}${names.length > 24 ? `; ${names.length} tools total — search by service and action` : ""}`).join("\n");
     },

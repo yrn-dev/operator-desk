@@ -4,6 +4,8 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 import crypto from "node:crypto";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { OperatorLine, pathWithBin } from "./rpc.ts";
 import { createUiEventStream } from "./ui-events.ts";
 import { bundledOperator, locateBinary, locateOpr, type OperatorLauncher } from "./locate-opr.ts";
@@ -32,7 +34,7 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 
 // ES-модули не грузятся по file:// из-за CORS — отдаём сборку через свой протокол.
 protocol.registerSchemesAsPrivileged([
-  { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 const lines = new Map<string, OperatorLine>();
@@ -277,6 +279,78 @@ ipcMain.handle("usage:set", (_e, enabled: boolean) => {
   return usagePreference();
 });
 ipcMain.handle("app:latestVersion", () => checkLatestVersion());
+ipcMain.handle("app:installUpdate", async () => {
+  const release = await checkLatestVersion();
+  if (!release) throw new Error("Сейчас нет доступного обновления.");
+  const url = new URL(release.url);
+  const extension = path.extname(url.pathname).toLowerCase();
+  const expectedExtension = release.kind === "nsis" ? ".exe" : release.kind === "appimage" ? ".appimage" : release.kind === "deb" ? ".deb" : ".pacman";
+  if (extension !== expectedExtension) throw new Error("Формат обновления не совпадает с системой.");
+  const appImagePath = release.kind === "appimage" ? process.env.APPIMAGE : undefined;
+  const destinationDirectory = appImagePath ? path.dirname(appImagePath) : os.tmpdir();
+  const destination = path.join(destinationDirectory, `operator-update-${release.version}-${crypto.randomUUID()}${extension}`);
+  const response = await fetch(url, { signal: AbortSignal.timeout(180_000) });
+  if (!response.ok || !response.body) throw new Error(`Не удалось загрузить обновление (${response.status}).`);
+  const size = Number(response.headers.get("content-length") ?? 0);
+  if (size > 300 * 1024 * 1024) throw new Error("Файл обновления больше допустимого размера.");
+  const digest = crypto.createHash("sha512");
+  let received = 0;
+  const meter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.length;
+      if (received > 300 * 1024 * 1024) return callback(new Error("Файл обновления больше допустимого размера."));
+      digest.update(chunk);
+      forward("app:updateProgress", { received, total: size });
+      callback(null, chunk);
+    },
+  });
+  try {
+    await pipeline(Readable.fromWeb(response.body as any), meter, fs.createWriteStream(destination, { mode: 0o700, flags: "wx" }));
+    if (digest.digest("base64") !== release.sha512) throw new Error("Контрольная сумма не совпала. Файл обновления удалён.");
+
+    if (release.kind === "appimage") {
+      const current = process.env.APPIMAGE;
+      if (!current) throw new Error("Автообновление AppImage доступно только при запуске из AppImage.");
+      await fs.promises.chmod(destination, 0o755);
+      await fs.promises.rename(destination, current);
+      const updatedApp = spawnPortable(current, [], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        env: { ...process.env, APPIMAGE: current },
+      });
+      updatedApp.unref();
+      app.quit();
+      return { ok: true };
+    }
+
+    const command = release.kind === "nsis" ? destination : "pkexec";
+    const args = release.kind === "nsis" ? [] : release.kind === "deb"
+      ? ["apt-get", "install", "--yes", destination]
+      : ["pacman", "-U", "--noconfirm", destination];
+    const child = spawnPortable(command, args, { detached: true, stdio: "ignore", windowsHide: true });
+    if (release.kind === "nsis") {
+      await new Promise<void>((resolve, reject) => {
+        child.once("spawn", () => resolve());
+        child.once("error", reject);
+      });
+      child.unref();
+      app.quit();
+    } else {
+      const exitCode = await new Promise<number>((resolve, reject) => {
+        child.once("error", reject);
+        child.once("exit", (code) => resolve(code ?? 1));
+      });
+      if (exitCode !== 0) throw new Error("Установка отменена или завершилась с ошибкой.");
+      app.relaunch();
+      app.quit();
+    }
+    return { ok: true };
+  } catch (error) {
+    await fs.promises.rm(destination, { force: true }).catch(() => {});
+    throw error;
+  }
+});
 
 function forward(channel: string, payload: unknown): void {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -1041,7 +1115,7 @@ ipcMain.handle("session:title", async (_e, args: { firstMessage: string; cwd: st
 
   // print-режим ждёт ввода, если stdin — закрытый дескриптор: подставляем /dev/null.
   const devNull = fs.openSync(os.devNull, "r");
-  const child = spawnPortable(launcher.command, [...launcher.prefixArgs, "--print", "--no-session", ask], {
+  const child = spawnPortable(launcher.command, [...launcher.prefixArgs, "--print", "--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-prompt-templates", "--thinking", "off", "--system-prompt", "Придумай короткое название диалога. Верни только название, без пояснений.", ask], {
     cwd: args.cwd,
     env: { ...process.env, ...launcher.env, NO_COLOR: "1", PATH: pathWithBin(launcher.command) },
     stdio: [devNull, "pipe", "pipe"],
@@ -1049,7 +1123,7 @@ ipcMain.handle("session:title", async (_e, args: { firstMessage: string; cwd: st
 
   return new Promise<string | null>((resolve) => {
     let out = "";
-    const stop = setTimeout(() => child.kill(), 120_000);
+    const stop = setTimeout(() => child.kill(), 20_000);
 
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => (out += chunk));
