@@ -3,9 +3,9 @@
 Настольный коммутатор для агента [operator](https://github.com/yrn-dev/Operator) (CLI, npm `pzero-operator`).
 Исходники: [yrn-dev/operator-desk](https://github.com/yrn-dev/operator-desk).
 
-**Скачать готовую macOS-сборку:** откройте [GitHub Releases](https://github.com/yrn-dev/operator-desk/releases/latest).
-Apple Silicon устанавливается командой из [MACOS_INSTALL.md](MACOS_INSTALL.md);
-там же есть команда для Intel. Сборка и загрузка файлов происходят через GitHub Actions.
+**macOS:** готовых `.app` и `.dmg` для скачивания нет. Соберите приложение
+на своём Mac из исходников за несколько команд по инструкции
+[MACOS_INSTALL.md](MACOS_INSTALL.md). Исходники доступны прямо в этом репозитории.
 
 **Собрать из исходников:** откройте [BUILD.md](BUILD.md), раздел «Коротко: только команды».
 

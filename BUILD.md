@@ -37,11 +37,8 @@ node -p "require('./package.json').version"
 node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 ```
 
-Если нужна готовая версия, не собирайте её вручную: скачайте `.dmg` или `.zip`
-из [GitHub Releases](https://github.com/yrn-dev/operator-desk/releases/latest).
-Короткие команды установки и разница между Apple Silicon и Intel есть в
-[MACOS_INSTALL.md](MACOS_INSTALL.md). GitHub Actions собирает обе архитектуры
-на соответствующих macOS runner-ах.
+На macOS соберите приложение на своём Mac: готовые `.dmg` и `.zip` не
+публикуются. Короткие команды есть в [MACOS_INSTALL.md](MACOS_INSTALL.md).
 
 Две последние строки должны напечатать **`0.3.8`** (версия приложения) и
 **`1.2.3`** (версия ядра). Если цифры другие — архив старый, попросите у автора
