@@ -37,6 +37,7 @@ const manifest = {
   cli: {
     version: cliPackage.version,
     packageName: cliPackage.name,
+    installUrl: `https://github.com/yrn-dev/Operator/releases/download/v${cliPackage.version}/${cliPackage.name}-${cliPackage.version}.tgz`,
     note: section(cliNotes, cliHeading),
   },
   desktop: {
