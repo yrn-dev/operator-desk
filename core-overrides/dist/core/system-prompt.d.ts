@@ -24,5 +24,6 @@ export interface BuildSystemPromptOptions {
     skills?: Skill[];
 }
 /** Build the system prompt with tools, guidelines, and context */
+export declare const BASE_PROMPT: string;
 export declare function buildSystemPrompt(options: BuildSystemPromptOptions): string;
 //# sourceMappingURL=system-prompt.d.ts.map

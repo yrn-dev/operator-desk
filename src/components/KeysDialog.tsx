@@ -4,7 +4,7 @@ import { ProviderLogo, hasProviderLogo } from "./ProviderLogo.tsx";
 
 /** Понятное имя провайдера и подсказка, где взять ключ. */
 const PROVIDERS: Record<string, { label: string; hint: string }> = {
-  "alem-ai": { label: "Alem AI", hint: "qwen3-8, gemma4, gpt-oss · llm.alem.ai" },
+  "alem-ai": { label: "Alem AI", hint: "qwen3.8, gpt-oss:120b(medium) · llm.alem.ai" },
   ollama: { label: "Ollama", hint: "локальные и облачные модели Ollama" },
   openai: { label: "OpenAI", hint: "platform.openai.com" },
   anthropic: { label: "Anthropic", hint: "console.anthropic.com" },
@@ -30,7 +30,13 @@ export function KeysDialog({ models, onClose }: { models: ModelInfo[]; onClose: 
     .sort();
 
   const modelsOf = (provider: string) =>
-    models.filter((model) => model.provider === provider).map((model) => model.id);
+    models
+      .filter((model) => model.provider === provider && !(model.provider === "alem-ai" && model.id === "gemma4"))
+      .map((model) =>
+        model.provider === "alem-ai" && /^(qwen3-8|qwen3\.8)$/i.test(model.id) ? "qwen3.8"
+        : model.provider === "alem-ai" && model.id === "gpt-oss" ? "gpt-oss:120b(medium)"
+        : model.id
+      );
 
   return (
     <div

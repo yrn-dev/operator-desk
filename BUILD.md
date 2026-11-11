@@ -40,7 +40,7 @@ node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 На macOS соберите приложение на своём Mac: готовые `.dmg` и `.zip` не
 публикуются. Короткие команды есть в [MACOS_INSTALL.md](MACOS_INSTALL.md).
 
-Две последние строки должны напечатать **`0.3.8`** (версия приложения) и
+Две последние строки должны напечатать **`0.3.9`** (версия приложения) и
 **`1.2.3`** (версия ядра). Если цифры другие — архив старый, попросите у автора
 новый.
 
@@ -48,8 +48,8 @@ node -p "require('./vendor/node_modules/pzero-operator/package.json').version"
 
 | Система | Что отправить автору |
 | --- | --- |
-| Windows | `Operator-0.3.8-win-x64.exe` и `Operator-0.3.8-win-x64-portable.exe` |
-| macOS | `Operator-0.3.8-mac-arm64.dmg`, `Operator-0.3.8-mac-x64.dmg` и оба `.zip` |
+| Windows | `Operator-0.3.9-win-x64.exe` и `Operator-0.3.9-win-x64-portable.exe` |
+| macOS | `Operator-0.3.9-mac-arm64.dmg`, `Operator-0.3.9-mac-x64.dmg` и оба `.zip` |
 
 Если какая-то команда упала — подробные шаги и разбор ошибок ниже, начиная с
 раздела 1. На Windows `EPERM ... symlink`

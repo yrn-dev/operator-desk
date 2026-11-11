@@ -80,7 +80,7 @@ export function prepareRuntimeContext(context, { omitThinking = false } = {}) {
         if (changed) messages[i] = { ...message, content };
     }
     let systemPrompt = context.systemPrompt;
-    if (progress.stalled) systemPrompt += "\n\n[Runtime: repeated attempts made no observable progress.] Tool execution is paused for this response. Give a concise, honest status: verified completed work, the concrete blocker, and what is needed next. Do not claim completion. Do not invent tool calls. A new user instruction resumes tool access.";
-    else if (progress.warning) systemPrompt += "\n\n[Runtime: repeated failures or unchanged observations.] Reassess the current approach before the next action. Read the actual error, check prerequisites or choose an available alternative. Avoid repeating the same failed call or polling an unchanged result. Preserve the user's goal and authorization.";
+    if (progress.stalled) systemPrompt += "\n\n[Runtime: repeated attempts made no observable progress.] Tool execution is paused for this response. Give a concise, honest status in the user's language: verified completed work, the concrete blocker, and what is needed next. Do not claim completion. Do not invent tool calls. A new user instruction resumes tool access.";
+    else if (progress.warning) systemPrompt += "\n\n[Runtime: repeated failures or unchanged observations.] Reassess the current approach before the next action. Read the actual error, check prerequisites or choose an available alternative. Avoid repeating the same failed call or polling an unchanged result. Preserve the user's goal, language, and authorization.";
     return { context: { ...context, messages, systemPrompt, ...(progress.stalled ? { tools: [] } : {}) }, ...progress };
 }

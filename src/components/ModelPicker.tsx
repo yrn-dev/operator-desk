@@ -24,19 +24,23 @@ export function ModelPicker({ line, models, onSetModel, onSetThinking, onOpenKey
   onOpenKeys: () => void;
   onRefreshModels: () => void;
 }) {
-  const options = useMemo<AiModel[]>(() => models.map((model) => ({
-    id: modelKey(model),
-    label: model.id,
-    providerId: model.provider,
-    providerLogo: hasProviderLogo(model.provider) ? <ProviderLogo provider={model.provider} /> : undefined,
-    providerLogoCompact: hasProviderLogo(model.provider) ? <ProviderLogo provider={model.provider} compact /> : undefined,
-    description: model.provider === "alem-ai" ? "Alem AI" : model.provider === "ollama"
-      ? `Ollama · ${model.ollama?.source === "cloud" ? "облачная" : "на устройстве"}${model.ollama?.running === false ? " · сервер выключен" : ""}` : model.provider,
-    disabled: model.ollama?.running === false,
-    contexts: model.contextWindow > 0 ? [model.contextWindow] : undefined,
-    efforts: model.reasoning && model.provider !== "ollama" && !(model.provider === "alem-ai" && /^(qwen3-8|qwen3\.8)$/i.test(model.id)) ? efforts : undefined,
-    supportsThinking: model.reasoning,
-  })), [models]);
+  const options = useMemo<AiModel[]>(() => models
+    .filter((model) => !(model.provider === "alem-ai" && model.id === "gemma4"))
+    .map((model) => ({
+      id: modelKey(model),
+      label: model.provider === "alem-ai" && /^(qwen3-8|qwen3\.8)$/i.test(model.id) ? "qwen3.8"
+        : model.provider === "alem-ai" && model.id === "gpt-oss" ? "gpt-oss:120b(medium)"
+        : model.id,
+      providerId: model.provider,
+      providerLogo: hasProviderLogo(model.provider) ? <ProviderLogo provider={model.provider} /> : undefined,
+      providerLogoCompact: hasProviderLogo(model.provider) ? <ProviderLogo provider={model.provider} compact /> : undefined,
+      description: model.provider === "alem-ai" ? "Alem AI" : model.provider === "ollama"
+        ? `Ollama · ${model.ollama?.source === "cloud" ? "облачная" : "на устройстве"}${model.ollama?.running === false ? " · сервер выключен" : ""}` : model.provider,
+      disabled: model.ollama?.running === false,
+      contexts: model.contextWindow > 0 ? [model.contextWindow] : undefined,
+      efforts: model.reasoning && model.provider !== "ollama" && !(model.provider === "alem-ai" && /^(qwen3-8|qwen3\.8)$/i.test(model.id)) ? efforts : undefined,
+      supportsThinking: model.reasoning,
+    })), [models]);
 
   const selected = line?.model ? modelKey(line.model) : "";
   const opened = useCallback((open: boolean) => { if (open) onRefreshModels(); }, [onRefreshModels]);

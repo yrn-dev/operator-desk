@@ -328,7 +328,7 @@ export class ModelRegistry {
         const builtInModels = [];
         let combined = this.mergeCustomModels(builtInModels, customModels);
 
-        // Alem AI — 3 модели. qwen3-8 и gemma4 поддерживают image input; gpt-oss — text-only.
+        // Alem AI — 2 модели: qwen3-8 (с поддержкой изображений) и gpt-oss (text-only).
         const ALEM_AI_MODELS = [
             {
                 id: "qwen3-8",
@@ -343,18 +343,6 @@ export class ModelRegistry {
                 maxTokens: 16384,
                 maxImages: 1,
                 compat: { thinkingFormat: "qwen-chat-template", supportsReasoningEffort: false },
-            },
-            {
-                id: "gemma4",
-                name: "gemma4",
-                provider: "alem-ai",
-                api: "openai-completions",
-                baseUrl: "https://llm.alem.ai/v1",
-                reasoning: false,
-                input: ["text", "image"],
-                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-                contextWindow: 252000,
-                maxTokens: 16384,
             },
             {
                 id: "gpt-oss",

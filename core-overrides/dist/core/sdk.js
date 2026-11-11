@@ -22,7 +22,7 @@ import { createBashTool, createCodingTools, createEditTool, createFindTool, crea
 export { getImageLimit, limitImagesForModel } from "./image-limit.js";
 // Re-exports
 export * from "./agent-session-runtime.js";
-export { withFileMutationQueue,
+export { withFileMutationQueue, 
 // Tool factories (for custom cwd)
 createCodingTools, createReadOnlyTools, createReadTool, createBashTool, createEditTool, createWriteTool, createGrepTool, createFindTool, createLsTool, };
 // Helper Functions
@@ -156,7 +156,7 @@ export async function createAgentSession(options = {}) {
                     if (hasImages) {
                         const filteredContent = content
                             .map((c) => c.type === "image" ? { type: "text", text: "Image reading is disabled." } : c)
-                            .filter((c, i, arr) =>
+                            .filter((c, i, arr) => 
                         // Dedupe consecutive "Image reading is disabled." texts
                         !(c.type === "text" &&
                             c.text === "Image reading is disabled." &&
@@ -192,7 +192,7 @@ export async function createAgentSession(options = {}) {
             const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
             const timeoutMs = options?.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs;
             const websocketConnectTimeoutMs = options?.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs();
-            const prepared = prepareRuntimeContext(context, { omitThinking: isAlemQwen(model) && (!options?.reasoning || options.reasoning === "off") });
+            const prepared = prepareRuntimeContext({ ...context, messages: limitImagesForModel(context.messages, model) }, { omitThinking: isAlemQwen(model) && (!options?.reasoning || options.reasoning === "off") });
             return streamSimple(model, prepared.context, providerOptions(model, {
                 ...options,
                 ...(prepared.stalled ? { toolChoice: "none", maxTokens: 2048 } : {}),

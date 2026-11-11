@@ -1,8 +1,10 @@
 node_modules/
-dist/
-dist-electron/
-release/
-vendor/
+/dist/
+/dist-electron/
+/release/
+/vendor/
+!core-overrides/dist/
+outputs/
 *.log
 __pycache__/
 *.pyc

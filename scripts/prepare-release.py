@@ -72,7 +72,7 @@ for artifact in artifacts:
         index, count = re.subn(pattern, rf'\g<1>{size} МБ', index)
         assert count == 1, f'Missing artifact label: {name}'
 assert previous not in index and version in index
-assert 'Operator-0.3.1-mac-arm64.dmg' in index and 'Operator-0.3.1-mac-x64.dmg' in index
+assert ('Operator-0.3.1-mac-arm64.dmg' in index and 'Operator-0.3.1-mac-x64.dmg' in index) or 'install.macosBuild' in index
 
 sums = [f"{artifact['sha256']}  {artifact['file']}" for artifact in artifacts]
 for name in ['Operator-0.3.1-mac-arm64.dmg', 'Operator-0.3.1-mac-x64.dmg']:
@@ -84,7 +84,7 @@ for name, content in pages.items():
     (stage / name).write_text(content)
 manifest = {'version': version, 'previous': previous,
             'original': {name: digest(stage / 'before' / name) for name in ['index.html', 'app.js', 'SHA256SUMS.txt']}
-                        | {'operator-updates.json': None},
+                        | {'operator-updates.json': digest(stage / 'before' / 'operator-updates.json') if (stage / 'before' / 'operator-updates.json').exists() else None},
             'artifacts': artifacts, 'pages': {name: digest(stage / name) for name in pages}}
 (stage / 'deploy-input.json').write_text(json.dumps(manifest, indent=2) + '\n')
 for name in ['index.html', 'app.js']:

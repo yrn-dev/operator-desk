@@ -30,12 +30,17 @@
     {
       "path": "core/defaults.d.ts",
       "baseSha256": "4c9f643959e65ffc2373b937b83f5fe1c32448663ae174e47c8b1928c2061ccf",
-      "sha256": "ed6eb5a700ef6448909e46b4df476a16caddcfd5c2f0357f32f96ae40cbd6223"
+      "sha256": "c280e180d549bc7d8cf65a0ccef4b5938076f5e5e6684ea93206dc42cdb81009"
     },
     {
       "path": "core/defaults.js",
       "baseSha256": "de3a2ec307c2ab9ad63922e9a2c8009a39013c6387c06746d2eec79550faf48a",
       "sha256": "04424659f9fd2cb40a3bdef04e3fac2f27efd0b47bd1bb12ba87cde45c007108"
+    },
+    {
+      "path": "core/image-limit.js",
+      "baseSha256": "aca3b96b1155ade7c3d3d6611750a431377727982da0b9f888778f5203a24167",
+      "sha256": "f1338004b7e3d4883022fb4ffa61c0ad92059e56c528ccbeeb42bb0103f672ca"
     },
     {
       "path": "core/model-registry.d.ts",
@@ -45,7 +50,7 @@
     {
       "path": "core/model-registry.js",
       "baseSha256": "285d9f4bd10a8248aba1b9dd2d86394d2ce6dad9e8051354e7a91ec30e5bf360",
-      "sha256": "98debf0e98a282620a9fd48917bbae78e01cd2b008ea0adaec2f8b4aa6dac7cd"
+      "sha256": "4b1ad17ce312e18545cab479152e88f57bd0361db3ee2f6763ca7e128059dc3d"
     },
     {
       "path": "core/ollama-discovery.js",
@@ -60,32 +65,32 @@
     {
       "path": "core/resource-loader.d.ts",
       "baseSha256": "9e03394c467aae56ae69b7e4af8df5c8cd765778ae5e28a8aed40101577fd4fc",
-      "sha256": "ba8c5b4855ca04b1a306a3759709c6ba5faffb9ab7c76ea6531db323c4324144"
+      "sha256": "4a3c54fa7c2afc4467cbefa2dd091f76cd9105c30d1e203c5674f6b3eb2d98e3"
     },
     {
       "path": "core/resource-loader.js",
       "baseSha256": "0b2530efa1acaadf2fae02d9a3051bff5db5f8ad78e6fb3c7f2ea4289e75a99e",
-      "sha256": "8f5546043b79e5a72c7567d923763ee8ffb559a1355cff92ee618dbcc43dddd1"
+      "sha256": "61f14d143cb68ed72f03f8fb370a95a5f238eabf07430ad52c44af7a057b6bf2"
     },
     {
       "path": "core/runtime-context.js",
       "baseSha256": null,
-      "sha256": "75a8ad5c22b07363ad23a2c46c3f74fbcad378e1fe32ce78861df9b3c6deacab"
+      "sha256": "443957e9091322d25bdfe9871f337ad961cb0596872ba96dfe1d0fc41aa83b7e"
     },
     {
       "path": "core/sdk.js",
       "baseSha256": "a2f26bda5e85a4867ce1574866832d394f8079c0d77cdaa4e21ba41c473f1c44",
-      "sha256": "81c9eff34cb3c4acb48c153b3c0de42f08050d5ed983c530e32f9c7f46576cec"
+      "sha256": "8eabbacba7d3f31a25fcf1416e6d6e965b768986b2c1852990ffcffef6cba912"
     },
     {
       "path": "core/system-prompt.d.ts",
       "baseSha256": "2d99ca582e7d9eed36e848b8e86a6d60572263032969372e39653009bf1f6e20",
-      "sha256": "76cc8ca6e38c00d142b2ecffdc1a271aaba77b730c02557a7ff55038c8205c09"
+      "sha256": "a2a180b6b9c1d177f9598e591c7b75b7639f3b63fde0098d4f7b633600a5c9d1"
     },
     {
       "path": "core/system-prompt.js",
       "baseSha256": "48b96422a36c4311157a231d89aa7cf56db4c237bba5936e969843b251ccd086",
-      "sha256": "a3a5a6d32619691686ab2b498971a8a59419279b9e9ddd54c950624c6fffa22d"
+      "sha256": "c4e23f93737eb46bddc1da2147dcf1d7be27f338a54b02a2092f654cd88c535e"
     },
     {
       "path": "core/tools/memory.js",
